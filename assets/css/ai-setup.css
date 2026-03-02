@@ -1,0 +1,98 @@
+/**
+ * OneClick AI Setup CSS
+ *
+ * @package WooOneClick
+ * @since 1.1.0
+ */
+
+.oneclick-ai-container {
+    max-width: 1000px;
+    margin-top: 20px;
+}
+
+/* Generate Section */
+.oneclick-ai-generate-section {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+}
+
+.oneclick-ai-generate-section h2 {
+    margin-top: 0;
+}
+
+.oneclick-ai-generate-section .description {
+    margin-bottom: 15px;
+}
+
+/* Loading */
+.oneclick-ai-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+    padding: 10px;
+    background: #f0f6fc;
+    border-radius: 4px;
+}
+
+.oneclick-ai-loading .spinner {
+    float: none;
+    margin: 0;
+}
+
+.oneclick-ai-loading-text {
+    font-style: italic;
+    color: #2271b1;
+}
+
+/* Results Section */
+.oneclick-ai-results {
+    margin-top: 20px;
+}
+
+.oneclick-ai-section {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 16px 24px;
+    margin-bottom: 16px;
+}
+
+.oneclick-ai-section h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+.oneclick-ai-section table {
+    margin-bottom: 0;
+}
+
+.oneclick-ai-section .check-column {
+    width: 40px;
+    padding: 8px;
+}
+
+/* Apply Section */
+.oneclick-ai-apply-section {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 20px 24px;
+    text-align: center;
+}
+
+.oneclick-ai-apply-section .description {
+    margin-top: 10px;
+}
+
+/* Status Messages */
+.oneclick-ai-status {
+    margin-top: 16px;
+}
+
+.oneclick-ai-status .notice {
+    margin: 0;
+}
