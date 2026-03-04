@@ -1,7 +1,5 @@
 # Composer
-vendor/
 composer.phar
-composer.lock
 
 # IDE
 .vscode/
