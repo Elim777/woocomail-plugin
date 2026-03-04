@@ -40,7 +40,7 @@ class OneClick_API_Client {
      * Private constructor (singleton)
      */
     private function __construct() {
-        $this->base_url = rtrim(get_option('oneclick_backend_url', 'http://localhost:8001'), '/');
+        $this->base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
     }
 
     /**

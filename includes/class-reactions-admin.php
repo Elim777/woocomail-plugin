@@ -472,7 +472,7 @@ class OneClick_Reactions_Admin {
     }
 
     private function api_put($endpoint, $data) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'http://localhost:8001'), '/');
+        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
         $response = wp_remote_request($base_url . $endpoint, [
             'method'  => 'PUT',
             'headers' => ['Content-Type' => 'application/json', 'X-Site-URL' => site_url(), 'X-License-Key' => get_option('oneclick_license_key', '')],
@@ -486,7 +486,7 @@ class OneClick_Reactions_Admin {
     }
 
     private function api_patch($endpoint) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'http://localhost:8001'), '/');
+        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
         $response = wp_remote_request($base_url . $endpoint, [
             'method'  => 'PATCH',
             'headers' => ['Content-Type' => 'application/json', 'X-Site-URL' => site_url(), 'X-License-Key' => get_option('oneclick_license_key', '')],
@@ -499,7 +499,7 @@ class OneClick_Reactions_Admin {
     }
 
     private function api_delete($endpoint) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'http://localhost:8001'), '/');
+        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
         $response = wp_remote_request($base_url . $endpoint, [
             'method'  => 'DELETE',
             'headers' => ['Content-Type' => 'application/json', 'X-Site-URL' => site_url(), 'X-License-Key' => get_option('oneclick_license_key', '')],

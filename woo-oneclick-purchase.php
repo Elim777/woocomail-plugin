@@ -104,7 +104,7 @@ function oneclick_activation() {
 
     // Set default options
     if (!get_option('oneclick_backend_url')) {
-        update_option('oneclick_backend_url', 'http://localhost:8001', true);
+        update_option('oneclick_backend_url', 'https://woocomail-api.onrender.com', true);
     }
 
     // Schedule daily license check

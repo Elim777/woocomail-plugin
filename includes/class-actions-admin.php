@@ -356,7 +356,7 @@ class OneClick_Actions_Admin {
      * Send PUT request (wp_remote_request with PUT method)
      */
     private function api_put($endpoint, $data) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'http://localhost:8001'), '/');
+        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
         $url = $base_url . $endpoint;
 
         $response = wp_remote_request($url, [
@@ -388,7 +388,7 @@ class OneClick_Actions_Admin {
      * Send PATCH request
      */
     private function api_patch($endpoint) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'http://localhost:8001'), '/');
+        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
         $url = $base_url . $endpoint;
 
         $response = wp_remote_request($url, [
@@ -419,7 +419,7 @@ class OneClick_Actions_Admin {
      * Send DELETE request
      */
     private function api_delete($endpoint) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'http://localhost:8001'), '/');
+        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
         $url = $base_url . $endpoint;
 
         $response = wp_remote_request($url, [

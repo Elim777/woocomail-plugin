@@ -238,7 +238,7 @@ class OneClick_Email_Branding {
         ]);
 
         // Preview URL
-        $backend_url = rtrim(get_option('oneclick_backend_url', 'http://localhost:8001'), '/');
+        $backend_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
         $preview_url = $backend_url . '/api/branding/preview?' . http_build_query(['site_url' => site_url()]);
 
         // Notices

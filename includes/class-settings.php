@@ -52,7 +52,7 @@ class OneClick_Settings {
         register_setting('oneclick_settings', 'oneclick_backend_url', [
             'type' => 'string',
             'sanitize_callback' => 'esc_url_raw',
-            'default' => 'http://localhost:8001'
+            'default' => 'https://woocomail-api.onrender.com'
         ]);
 
         // Stripe settings
@@ -117,7 +117,7 @@ class OneClick_Settings {
             'oneclick_backend_section',
             [
                 'label_for' => 'oneclick_backend_url',
-                'placeholder' => 'http://localhost:8001'
+                'placeholder' => 'https://woocomail-api.onrender.com'
             ]
         );
 
@@ -429,7 +429,7 @@ class OneClick_Settings {
         $expires_at = get_option('oneclick_license_expires', '');
         $last_check = get_option('oneclick_license_last_check', '');
 
-        $backend_url = rtrim(get_option('oneclick_backend_url', 'http://localhost:8001'), '/');
+        $backend_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
         $checkout_url = $backend_url . '/checkout?' . http_build_query([
             'site_url' => site_url(),
             'tier' => 'pro',
