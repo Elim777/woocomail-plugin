@@ -23,6 +23,7 @@ class OneClick_Settings {
         add_action('admin_menu', [$this, 'add_menu']);
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_init', [$this, 'handle_license_check_after_checkout']);
+        add_action('admin_init', [$this, 'delete_legacy_stripe_key_options']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_styles']);
     }
 
@@ -55,38 +56,26 @@ class OneClick_Settings {
             'default' => 'https://woocomail-api.onrender.com'
         ]);
 
-        // Stripe settings
-        register_setting('oneclick_settings', 'oneclick_stripe_secret_key', [
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-        ]);
-
-        register_setting('oneclick_settings', 'oneclick_stripe_publishable_key', [
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-        ]);
-
-        // Redis settings
-        register_setting('oneclick_settings', 'oneclick_redis_host', [
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default' => '127.0.0.1'
-        ]);
-
-        register_setting('oneclick_settings', 'oneclick_redis_port', [
+        // Stripe integration consent. Keys stay in WooCommerce Stripe Gateway settings.
+        register_setting('oneclick_settings', 'oneclick_use_woocommerce_stripe_keys', [
             'type' => 'integer',
             'sanitize_callback' => 'absint',
-            'default' => 6379
+            'default' => 0,
+        ]);
+
+        register_setting('oneclick_settings', 'oneclick_purchase_link_mode', [
+            'type' => 'string',
+            'sanitize_callback' => [$this, 'sanitize_purchase_link_mode'],
+            'default' => 'all_with_cart_fallback',
+        ]);
+
+        register_setting('oneclick_settings', 'oneclick_purchase_completion_mode', [
+            'type' => 'string',
+            'sanitize_callback' => [$this, 'sanitize_purchase_completion_mode'],
+            'default' => 'purchase_session',
         ]);
 
         // --- General tab sections ---
-        add_settings_section(
-            'oneclick_backend_section',
-            __('Backend Configuration', 'woo-oneclick'),
-            [$this, 'render_backend_section'],
-            'oneclick-settings-general'
-        );
-
         add_settings_section(
             'oneclick_stripe_section',
             __('Stripe Configuration', 'woo-oneclick'),
@@ -94,84 +83,37 @@ class OneClick_Settings {
             'oneclick-settings-general'
         );
 
-        add_settings_section(
-            'oneclick_redis_section',
-            __('Redis Configuration (Optional)', 'woo-oneclick'),
-            [$this, 'render_redis_section'],
-            'oneclick-settings-general'
-        );
-
-        add_settings_section(
-            'oneclick_keys_section',
-            __('Cryptographic Keys', 'woo-oneclick'),
-            [$this, 'render_keys_section'],
-            'oneclick-settings-general'
-        );
-
-        // Fields: Backend
-        add_settings_field(
-            'oneclick_backend_url',
-            __('Backend URL', 'woo-oneclick'),
-            [$this, 'render_text_field'],
-            'oneclick-settings-general',
-            'oneclick_backend_section',
-            [
-                'label_for' => 'oneclick_backend_url',
-                'placeholder' => 'https://woocomail-api.onrender.com'
-            ]
-        );
-
         // Fields: Stripe
         add_settings_field(
-            'oneclick_stripe_secret_key',
-            __('Stripe Secret Key', 'woo-oneclick'),
-            [$this, 'render_text_field'],
+            'oneclick_use_woocommerce_stripe_keys',
+            __('Use WooCommerce Stripe', 'woo-oneclick'),
+            [$this, 'render_checkbox_field'],
             'oneclick-settings-general',
             'oneclick_stripe_section',
             [
-                'label_for' => 'oneclick_stripe_secret_key',
-                'type' => 'password',
-                'placeholder' => 'sk_test_...'
+                'label_for' => 'oneclick_use_woocommerce_stripe_keys',
+                'label' => __('Allow OneClick to use the Stripe keys already configured in WooCommerce Stripe Gateway.', 'woo-oneclick'),
             ]
         );
 
         add_settings_field(
-            'oneclick_stripe_publishable_key',
-            __('Stripe Publishable Key', 'woo-oneclick'),
-            [$this, 'render_text_field'],
+            'oneclick_purchase_link_mode',
+            __('Purchase Link Behavior', 'woo-oneclick'),
+            [$this, 'render_purchase_link_mode_field'],
             'oneclick-settings-general',
-            'oneclick_stripe_section',
-            [
-                'label_for' => 'oneclick_stripe_publishable_key',
-                'placeholder' => 'pk_test_...'
-            ]
+            'oneclick_stripe_section'
         );
 
-        // Fields: Redis
-        add_settings_field(
-            'oneclick_redis_host',
-            __('Redis Host', 'woo-oneclick'),
-            [$this, 'render_text_field'],
-            'oneclick-settings-general',
-            'oneclick_redis_section',
-            [
-                'label_for' => 'oneclick_redis_host',
-                'placeholder' => '127.0.0.1'
-            ]
-        );
+    }
 
-        add_settings_field(
-            'oneclick_redis_port',
-            __('Redis Port', 'woo-oneclick'),
-            [$this, 'render_text_field'],
-            'oneclick-settings-general',
-            'oneclick_redis_section',
-            [
-                'label_for' => 'oneclick_redis_port',
-                'type' => 'number',
-                'placeholder' => '6379'
-            ]
-        );
+    public function sanitize_purchase_link_mode($value) {
+        $allowed = ['all_with_cart_fallback', 'card_only'];
+        return in_array($value, $allowed, true) ? $value : 'all_with_cart_fallback';
+    }
+
+    public function sanitize_purchase_completion_mode($value) {
+        $allowed = ['purchase_session', 'immediate_purchase'];
+        return in_array($value, $allowed, true) ? $value : 'purchase_session';
     }
 
     /**
@@ -295,6 +237,21 @@ class OneClick_Settings {
     }
 
     /**
+     * Remove legacy OneClick-owned Stripe key options.
+     *
+     * Merchant Stripe API keys must remain owned by WooCommerce Stripe Gateway.
+     * OneClick only stores consent to use those gateway settings.
+     */
+    public function delete_legacy_stripe_key_options() {
+        if (!current_user_can('manage_woocommerce')) {
+            return;
+        }
+
+        delete_option('oneclick_stripe_secret_key');
+        delete_option('oneclick_stripe_publishable_key');
+    }
+
+    /**
      * Enqueue admin styles for settings page
      */
     public function enqueue_admin_styles($hook) {
@@ -410,6 +367,11 @@ class OneClick_Settings {
         <form action="options.php" method="post">
             <?php
             settings_fields('oneclick_settings');
+            ?>
+            <input type="hidden"
+                   name="oneclick_backend_url"
+                   value="<?php echo esc_attr(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com')); ?>">
+            <?php
             do_settings_sections('oneclick-settings-general');
             submit_button(__('Save Settings', 'woo-oneclick'));
             ?>
@@ -521,31 +483,26 @@ class OneClick_Settings {
     /**
      * Section descriptions
      */
-    public function render_backend_section() {
-        echo '<p>' . __('Configure the backend API URL for email sending and bot detection.', 'woo-oneclick') . '</p>';
-    }
-
     public function render_stripe_section() {
-        echo '<p>' . __('Enter your Stripe API keys for processing one-click purchases.', 'woo-oneclick') . '</p>';
-    }
+        $stripe_settings = get_option('woocommerce_stripe_settings', []);
+        $enabled = !empty($stripe_settings['enabled']) && $stripe_settings['enabled'] === 'yes';
+        $test_mode = !empty($stripe_settings['testmode']) && $stripe_settings['testmode'] === 'yes';
+        $secret_key = $test_mode
+            ? ($stripe_settings['test_secret_key'] ?? '')
+            : ($stripe_settings['secret_key'] ?? '');
+        $publishable_key = $test_mode
+            ? ($stripe_settings['test_publishable_key'] ?? '')
+            : ($stripe_settings['publishable_key'] ?? '');
+        $has_keys = !empty($secret_key) && !empty($publishable_key);
 
-    public function render_redis_section() {
-        echo '<p>' . __('Redis is recommended for token blacklist storage. If Redis is not available, WordPress Transients will be used as a fallback.', 'woo-oneclick') . '</p>';
-    }
+        echo '<p>' . __('OneClick does not store separate Stripe API keys. It can use the keys already configured in WooCommerce Stripe Gateway after you allow it below.', 'woo-oneclick') . '</p>';
 
-    public function render_keys_section() {
-        $public_key = get_option('oneclick_public_key');
-        $has_keys = !empty($public_key);
-
-        echo '<p>' . __('EdDSA (Ed25519) cryptographic keys for JWT token signing.', 'woo-oneclick') . '</p>';
-
-        if ($has_keys) {
-            echo '<p style="color: green;">' . __('Keys generated successfully on plugin activation.', 'woo-oneclick') . '</p>';
-            echo '<p><strong>' . __('Public Key:', 'woo-oneclick') . '</strong></p>';
-            echo '<textarea readonly style="width: 100%; height: 60px; font-family: monospace; font-size: 11px;">' . esc_textarea($public_key) . '</textarea>';
-            echo '<p class="description">' . __('Share this public key with your backend for token verification.', 'woo-oneclick') . '</p>';
+        if ($enabled && $has_keys) {
+            echo '<p style="color: green;">' . __('WooCommerce Stripe Gateway is enabled and has API keys configured.', 'woo-oneclick') . '</p>';
+        } elseif ($enabled) {
+            echo '<p style="color: orange;">' . __('WooCommerce Stripe Gateway is enabled, but its API keys are incomplete.', 'woo-oneclick') . '</p>';
         } else {
-            echo '<p style="color: red;">' . __('Keys not found. Try deactivating and reactivating the plugin.', 'woo-oneclick') . '</p>';
+            echo '<p style="color: orange;">' . __('WooCommerce Stripe Gateway is not enabled. One-click Stripe payments will not run until it is configured there.', 'woo-oneclick') . '</p>';
         }
     }
 
@@ -564,6 +521,43 @@ class OneClick_Settings {
                placeholder="<?php echo esc_attr($placeholder); ?>"
                class="regular-text"
                <?php echo $type === 'number' ? 'min="0"' : ''; ?>>
+        <?php
+    }
+
+    public function render_checkbox_field($args) {
+        $option = (int) get_option($args['label_for'], 0);
+        ?>
+        <label for="<?php echo esc_attr($args['label_for']); ?>">
+            <input type="checkbox"
+                   id="<?php echo esc_attr($args['label_for']); ?>"
+                   name="<?php echo esc_attr($args['label_for']); ?>"
+                   value="1"
+                   <?php checked(1, $option); ?>>
+            <?php echo esc_html($args['label'] ?? ''); ?>
+        </label>
+        <?php
+    }
+
+    public function render_purchase_link_mode_field() {
+        $value = get_option('oneclick_purchase_link_mode', 'all_with_cart_fallback');
+        ?>
+        <fieldset>
+            <label>
+                <input type="radio"
+                       name="oneclick_purchase_link_mode"
+                       value="all_with_cart_fallback"
+                       <?php checked($value, 'all_with_cart_fallback'); ?>>
+                <?php esc_html_e('Send to all purchases. Card purchases use one-click payment; non-card purchases continue to checkout.', 'woo-oneclick'); ?>
+            </label>
+            <br>
+            <label>
+                <input type="radio"
+                       name="oneclick_purchase_link_mode"
+                       value="card_only"
+                       <?php checked($value, 'card_only'); ?>>
+                <?php esc_html_e('Card purchases only. Non-card purchases are skipped.', 'woo-oneclick'); ?>
+            </label>
+        </fieldset>
         <?php
     }
 }

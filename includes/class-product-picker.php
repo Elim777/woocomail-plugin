@@ -19,6 +19,7 @@ class OneClick_Product_Picker {
     private $admin_pages = [
         'oneclick-actions',
         'oneclick-reactions',
+        'oneclick-public-links',
     ];
 
     public function __construct() {

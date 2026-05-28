@@ -51,7 +51,7 @@ class OneClick_Reactions_Admin {
 
         // DELETE ALL
         if ($submit === 'delete_all') {
-            $result = $this->api_delete("/api/reactions?site_url=" . urlencode(site_url()));
+            $result = OneClick_API_Client::instance()->delete("/api/reactions?site_url=" . urlencode(site_url()));
             if (!is_wp_error($result)) {
                 $count = $result['count'] ?? 0;
                 set_transient('oneclick_reaction_deleted_count', $count, 30);
@@ -67,7 +67,7 @@ class OneClick_Reactions_Admin {
 
         // DELETE
         if ($submit === 'delete' && $reaction_id) {
-            $result = $this->api_delete("/api/reactions/$reaction_id");
+            $result = OneClick_API_Client::instance()->delete("/api/reactions/$reaction_id");
             if (!is_wp_error($result)) {
                 wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '&deleted=1'));
                 exit;
@@ -94,7 +94,7 @@ class OneClick_Reactions_Admin {
 
         if ($reaction_id > 0) {
             unset($data['site_url']);
-            $result = $this->api_put("/api/reactions/$reaction_id", $data);
+            $result = OneClick_API_Client::instance()->put("/api/reactions/$reaction_id", $data);
         } else {
             $api = OneClick_API_Client::instance();
             $result = $api->post('/api/reactions', $data);
@@ -246,9 +246,8 @@ class OneClick_Reactions_Admin {
                 <tr>
                     <th><label for="reaction_type"><?php _e('Type', 'woo-oneclick'); ?></label></th>
                     <td>
-                        <select id="reaction_type" name="reaction_type">
-                            <option value="send_email" <?php selected($type, 'send_email'); ?>><?php _e('Send Email', 'woo-oneclick'); ?></option>
-                        </select>
+                        <input type="hidden" id="reaction_type" name="reaction_type" value="send_email">
+                        <span><?php _e('Send Email', 'woo-oneclick'); ?></span>
                     </td>
                 </tr>
                 <tr>
@@ -471,43 +470,4 @@ class OneClick_Reactions_Admin {
         return [];
     }
 
-    private function api_put($endpoint, $data) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
-        $response = wp_remote_request($base_url . $endpoint, [
-            'method'  => 'PUT',
-            'headers' => ['Content-Type' => 'application/json', 'X-Site-URL' => site_url(), 'X-License-Key' => get_option('oneclick_license_key', '')],
-            'body'    => wp_json_encode($data),
-            'timeout' => 30,
-        ]);
-        if (is_wp_error($response)) return $response;
-        $code = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        return ($code >= 200 && $code < 300) ? ($body ?? []) : new WP_Error('api_error', $body['detail'] ?? 'Unknown error');
-    }
-
-    private function api_patch($endpoint) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
-        $response = wp_remote_request($base_url . $endpoint, [
-            'method'  => 'PATCH',
-            'headers' => ['Content-Type' => 'application/json', 'X-Site-URL' => site_url(), 'X-License-Key' => get_option('oneclick_license_key', '')],
-            'timeout' => 30,
-        ]);
-        if (is_wp_error($response)) return $response;
-        $code = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        return ($code >= 200 && $code < 300) ? ($body ?? []) : new WP_Error('api_error', $body['detail'] ?? 'Unknown error');
-    }
-
-    private function api_delete($endpoint) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
-        $response = wp_remote_request($base_url . $endpoint, [
-            'method'  => 'DELETE',
-            'headers' => ['Content-Type' => 'application/json', 'X-Site-URL' => site_url(), 'X-License-Key' => get_option('oneclick_license_key', '')],
-            'timeout' => 30,
-        ]);
-        if (is_wp_error($response)) return $response;
-        $code = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        return ($code >= 200 && $code < 300) ? ($body ?? []) : new WP_Error('api_error', $body['detail'] ?? 'Unknown error');
-    }
 }

@@ -56,7 +56,7 @@ class OneClick_Actions_Admin {
 
         // DELETE ALL
         if ($action_submit === 'delete_all') {
-            $result = $this->api_delete("/api/actions?site_url=" . urlencode(site_url()));
+            $result = OneClick_API_Client::instance()->delete("/api/actions?site_url=" . urlencode(site_url()));
             if (!is_wp_error($result)) {
                 $count = $result['count'] ?? 0;
                 set_transient('oneclick_action_deleted_count', $count, 30);
@@ -72,7 +72,7 @@ class OneClick_Actions_Admin {
         if ($action_submit === 'delete') {
             $action_id = absint($_POST['action_id'] ?? 0);
             if ($action_id) {
-                $result = $this->api_delete("/api/actions/$action_id");
+                $result = OneClick_API_Client::instance()->delete("/api/actions/$action_id");
                 if (!is_wp_error($result)) {
                     wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '&deleted=1'));
                     exit;
@@ -99,7 +99,7 @@ class OneClick_Actions_Admin {
         if ($action_id > 0) {
             // UPDATE
             unset($data['site_url']);
-            $result = $this->api_put("/api/actions/$action_id", $data);
+            $result = OneClick_API_Client::instance()->put("/api/actions/$action_id", $data);
         } else {
             // CREATE
             $result = $api->post('/api/actions', $data);
@@ -352,97 +352,4 @@ class OneClick_Actions_Admin {
         return [];
     }
 
-    /**
-     * Send PUT request (wp_remote_request with PUT method)
-     */
-    private function api_put($endpoint, $data) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
-        $url = $base_url . $endpoint;
-
-        $response = wp_remote_request($url, [
-            'method'  => 'PUT',
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'X-Site-URL'   => site_url(),
-                'X-License-Key' => get_option('oneclick_license_key', ''),
-            ],
-            'body'    => wp_json_encode($data),
-            'timeout' => 30,
-        ]);
-
-        if (is_wp_error($response)) {
-            return $response;
-        }
-
-        $code = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-
-        if ($code >= 200 && $code < 300) {
-            return $body ?? [];
-        }
-
-        return new WP_Error('api_error', $body['detail'] ?? 'Unknown error', ['status' => $code]);
-    }
-
-    /**
-     * Send PATCH request
-     */
-    private function api_patch($endpoint) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
-        $url = $base_url . $endpoint;
-
-        $response = wp_remote_request($url, [
-            'method'  => 'PATCH',
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'X-Site-URL'   => site_url(),
-                'X-License-Key' => get_option('oneclick_license_key', ''),
-            ],
-            'timeout' => 30,
-        ]);
-
-        if (is_wp_error($response)) {
-            return $response;
-        }
-
-        $code = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-
-        if ($code >= 200 && $code < 300) {
-            return $body ?? [];
-        }
-
-        return new WP_Error('api_error', $body['detail'] ?? 'Unknown error', ['status' => $code]);
-    }
-
-    /**
-     * Send DELETE request
-     */
-    private function api_delete($endpoint) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
-        $url = $base_url . $endpoint;
-
-        $response = wp_remote_request($url, [
-            'method'  => 'DELETE',
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'X-Site-URL'   => site_url(),
-                'X-License-Key' => get_option('oneclick_license_key', ''),
-            ],
-            'timeout' => 30,
-        ]);
-
-        if (is_wp_error($response)) {
-            return $response;
-        }
-
-        $code = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-
-        if ($code >= 200 && $code < 300) {
-            return $body ?? [];
-        }
-
-        return new WP_Error('api_error', $body['detail'] ?? 'Unknown error', ['status' => $code]);
-    }
 }

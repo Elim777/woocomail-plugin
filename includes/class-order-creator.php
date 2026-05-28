@@ -175,6 +175,128 @@ class OneClick_Order_Creator {
     }
 
     /**
+     * Create one WooCommerce order from a timed purchase session.
+     *
+     * @param array $data Session order data.
+     * @return int|WP_Error
+     */
+    public function create_session_order($data) {
+        try {
+            $session_id = sanitize_text_field($data['session_id'] ?? '');
+            $user_id = (int) ($data['user_id'] ?? 0);
+            $items = $data['items'] ?? [];
+            $payment_method = sanitize_key($data['payment_method'] ?? 'stripe');
+            $payment_intent_id = sanitize_text_field($data['payment_intent_id'] ?? '');
+            $original_order_id = !empty($data['original_order_id']) ? (int) $data['original_order_id'] : null;
+
+            if (empty($session_id) || empty($user_id) || empty($items)) {
+                return new WP_Error('invalid_session_order_data', 'Missing required session order data');
+            }
+
+            if ($payment_method === 'stripe' && empty($payment_intent_id)) {
+                return new WP_Error('invalid_session_order_data', 'Missing payment_intent_id for Stripe session order');
+            }
+
+            $existing = wc_get_orders([
+                'limit' => 1,
+                'meta_key' => '_oneclick_session_id',
+                'meta_value' => $session_id,
+                'return' => 'ids',
+            ]);
+            if (!empty($existing)) {
+                error_log(sprintf('OneClick Order Creator: Session %s already has order #%d', $session_id, $existing[0]));
+                return (int) $existing[0];
+            }
+
+            $order = wc_create_order([
+                'customer_id' => $user_id,
+                'status' => 'pending',
+                'created_via' => 'oneclick_purchase_session',
+            ]);
+
+            if (is_wp_error($order)) {
+                return $order;
+            }
+
+            foreach ($items as $item) {
+                $product_id = (int) ($item['product_id'] ?? 0);
+                $quantity = max(1, (int) ($item['quantity'] ?? 1));
+                $price = (float) ($item['price'] ?? 0);
+                $product = wc_get_product($product_id);
+
+                if (!$product || !$product->is_purchasable()) {
+                    return new WP_Error('invalid_session_product', sprintf('Product %d is not purchasable', $product_id));
+                }
+
+                $order->add_product($product, $quantity, [
+                    'subtotal' => $price * $quantity,
+                    'total' => $price * $quantity,
+                ]);
+            }
+
+            $source_order = $this->get_source_order($original_order_id, $user_id);
+            if ($source_order) {
+                $this->copy_addresses_from_order($order, $source_order);
+                $this->copy_shipping_from_order($order, $source_order);
+            } else {
+                $this->copy_addresses_from_last_order($order, $user_id);
+                if (in_array($payment_method, ['cod', 'bacs'], true)) {
+                    $this->copy_shipping_from_last_order($order, $user_id);
+                }
+            }
+
+            $order->calculate_totals();
+            $order->update_meta_data('_oneclick_purchase', 'yes');
+            $order->update_meta_data('_oneclick_purchase_session', 'yes');
+            $order->update_meta_data('_oneclick_session_id', $session_id);
+            $order->update_meta_data('_oneclick_offer_id', sanitize_text_field($data['offer_id'] ?? ''));
+            $order->update_meta_data('_oneclick_payment_method', $payment_method);
+
+            if (!empty($payment_intent_id)) {
+                $order->update_meta_data('_stripe_payment_intent_id', $payment_intent_id);
+            }
+            if (!empty($original_order_id)) {
+                $order->update_meta_data('_oneclick_original_order_id', $original_order_id);
+            }
+
+            $this->set_payment_method_on_order($order, $payment_method);
+            $order->add_order_note(sprintf(
+                __('OneClick timed purchase session completed. Session: %s. Payment Method: %s', 'woo-oneclick'),
+                $session_id,
+                $payment_method
+            ));
+            $order->save();
+
+            switch ($payment_method) {
+                case 'stripe':
+                    $order->payment_complete($payment_intent_id);
+                    break;
+                case 'bacs':
+                    $order->update_status('on-hold', __('OneClick session BACS order — awaiting bank transfer.', 'woo-oneclick'));
+                    break;
+                case 'cod':
+                default:
+                    $order->update_status('processing', __('OneClick session order — ready for fulfillment.', 'woo-oneclick'));
+                    break;
+            }
+
+            error_log(sprintf(
+                'OneClick Order Creator: Session order #%d created [%s] for user #%d, session %s, items=%d',
+                $order->get_id(),
+                $payment_method,
+                $user_id,
+                $session_id,
+                count($items)
+            ));
+
+            return $order->get_id();
+        } catch (Exception $e) {
+            error_log('OneClick Session Order Creator Exception: ' . $e->getMessage());
+            return new WP_Error('session_order_creation_failed', $e->getMessage());
+        }
+    }
+
+    /**
      * Copy billing and shipping addresses from user's last order
      *
      * More reliable than user meta — last order always has the most recent address.
@@ -187,40 +309,41 @@ class OneClick_Order_Creator {
         $last_order = $this->get_last_order($user_id);
 
         if ($last_order) {
-            // Copy billing from last order
-            $order->set_address([
-                'first_name' => $last_order->get_billing_first_name(),
-                'last_name'  => $last_order->get_billing_last_name(),
-                'company'    => $last_order->get_billing_company(),
-                'address_1'  => $last_order->get_billing_address_1(),
-                'address_2'  => $last_order->get_billing_address_2(),
-                'city'       => $last_order->get_billing_city(),
-                'state'      => $last_order->get_billing_state(),
-                'postcode'   => $last_order->get_billing_postcode(),
-                'country'    => $last_order->get_billing_country(),
-                'email'      => $last_order->get_billing_email(),
-                'phone'      => $last_order->get_billing_phone(),
-            ], 'billing');
-
-            // Copy shipping from last order
-            $order->set_address([
-                'first_name' => $last_order->get_shipping_first_name(),
-                'last_name'  => $last_order->get_shipping_last_name(),
-                'company'    => $last_order->get_shipping_company(),
-                'address_1'  => $last_order->get_shipping_address_1(),
-                'address_2'  => $last_order->get_shipping_address_2(),
-                'city'       => $last_order->get_shipping_city(),
-                'state'      => $last_order->get_shipping_state(),
-                'postcode'   => $last_order->get_shipping_postcode(),
-                'country'    => $last_order->get_shipping_country(),
-            ], 'shipping');
-
+            $this->copy_addresses_from_order($order, $last_order);
             return;
         }
 
         // Fallback: use user meta
         $this->set_billing_address_from_meta($order, $user_id);
         $this->set_shipping_address_from_meta($order, $user_id);
+    }
+
+    private function copy_addresses_from_order($order, $source_order) {
+        $order->set_address([
+            'first_name' => $source_order->get_billing_first_name(),
+            'last_name'  => $source_order->get_billing_last_name(),
+            'company'    => $source_order->get_billing_company(),
+            'address_1'  => $source_order->get_billing_address_1(),
+            'address_2'  => $source_order->get_billing_address_2(),
+            'city'       => $source_order->get_billing_city(),
+            'state'      => $source_order->get_billing_state(),
+            'postcode'   => $source_order->get_billing_postcode(),
+            'country'    => $source_order->get_billing_country(),
+            'email'      => $source_order->get_billing_email(),
+            'phone'      => $source_order->get_billing_phone(),
+        ], 'billing');
+
+        $order->set_address([
+            'first_name' => $source_order->get_shipping_first_name(),
+            'last_name'  => $source_order->get_shipping_last_name(),
+            'company'    => $source_order->get_shipping_company(),
+            'address_1'  => $source_order->get_shipping_address_1(),
+            'address_2'  => $source_order->get_shipping_address_2(),
+            'city'       => $source_order->get_shipping_city(),
+            'state'      => $source_order->get_shipping_state(),
+            'postcode'   => $source_order->get_shipping_postcode(),
+            'country'    => $source_order->get_shipping_country(),
+        ], 'shipping');
     }
 
     /**
@@ -244,10 +367,14 @@ class OneClick_Order_Creator {
             return;
         }
 
-        $shipping_items = $last_order->get_shipping_methods();
+        $this->copy_shipping_from_order($order, $last_order);
+    }
+
+    private function copy_shipping_from_order($order, $source_order) {
+        $shipping_items = $source_order->get_shipping_methods();
 
         if (empty($shipping_items)) {
-            error_log(sprintf('OneClick Order Creator: Last order #%d has no shipping methods', $last_order->get_id()));
+            error_log(sprintf('OneClick Order Creator: Source order #%d has no shipping methods', $source_order->get_id()));
             return;
         }
 
@@ -280,7 +407,7 @@ class OneClick_Order_Creator {
         error_log(sprintf(
             'OneClick Order Creator: Copied %d shipping method(s) from order #%d',
             count($shipping_items),
-            $last_order->get_id()
+            $source_order->get_id()
         ));
     }
 
@@ -331,6 +458,19 @@ class OneClick_Order_Creator {
         ]);
 
         return !empty($orders) ? $orders[0] : null;
+    }
+
+    private function get_source_order($order_id, $user_id) {
+        if (empty($order_id)) {
+            return null;
+        }
+
+        $order = wc_get_order($order_id);
+        if (!$order || (int) $order->get_user_id() !== (int) $user_id) {
+            return null;
+        }
+
+        return $order;
     }
 
     /**

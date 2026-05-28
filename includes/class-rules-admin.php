@@ -49,7 +49,7 @@ class OneClick_Rules_Admin {
 
         // DELETE ALL
         if ($submit === 'delete_all') {
-            $result = $this->api_delete("/api/rules?site_url=" . urlencode(site_url()));
+            $result = OneClick_API_Client::instance()->delete("/api/rules?site_url=" . urlencode(site_url()));
             if (!is_wp_error($result)) {
                 $count = $result['count'] ?? 0;
                 set_transient('oneclick_rule_deleted_count', $count, 30);
@@ -63,7 +63,7 @@ class OneClick_Rules_Admin {
 
         // ACTIVATE ALL
         if ($submit === 'activate_all') {
-            $result = $this->api_patch("/api/rules/status?site_url=" . urlencode(site_url()) . "&status=active");
+            $result = OneClick_API_Client::instance()->patch("/api/rules/status?site_url=" . urlencode(site_url()) . "&status=active");
             if (!is_wp_error($result)) {
                 $count = $result['count'] ?? 0;
                 set_transient('oneclick_rule_status_count', $count, 30);
@@ -77,7 +77,7 @@ class OneClick_Rules_Admin {
 
         // DEACTIVATE ALL
         if ($submit === 'deactivate_all') {
-            $result = $this->api_patch("/api/rules/status?site_url=" . urlencode(site_url()) . "&status=inactive");
+            $result = OneClick_API_Client::instance()->patch("/api/rules/status?site_url=" . urlencode(site_url()) . "&status=inactive");
             if (!is_wp_error($result)) {
                 $count = $result['count'] ?? 0;
                 set_transient('oneclick_rule_status_count', $count, 30);
@@ -94,7 +94,7 @@ class OneClick_Rules_Admin {
             $rule_id = absint($_POST['rule_id'] ?? 0);
             $new_status = sanitize_text_field($_POST['new_status'] ?? 'active');
             if ($rule_id) {
-                $result = $this->api_put("/api/rules/$rule_id", ['status' => $new_status]);
+                $result = OneClick_API_Client::instance()->put("/api/rules/$rule_id", ['status' => $new_status]);
                 if (!is_wp_error($result)) {
                     wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '&toggled=1'));
                     exit;
@@ -107,7 +107,7 @@ class OneClick_Rules_Admin {
 
         // DELETE
         if ($submit === 'delete' && $rule_id) {
-            $result = $this->api_delete("/api/rules/$rule_id");
+            $result = OneClick_API_Client::instance()->delete("/api/rules/$rule_id");
             if (!is_wp_error($result)) {
                 wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '&deleted=1'));
                 exit;
@@ -126,7 +126,7 @@ class OneClick_Rules_Admin {
                 'reaction_id' => absint($_POST['reaction_id'] ?? 0),
                 'status'      => sanitize_text_field($_POST['rule_status'] ?? 'active'),
             ];
-            $result = $this->api_put("/api/rules/$rule_id", $data);
+            $result = OneClick_API_Client::instance()->put("/api/rules/$rule_id", $data);
         } else {
             $data = [
                 'site_url'    => site_url(),
@@ -394,45 +394,5 @@ class OneClick_Rules_Admin {
                 delete_transient('oneclick_rule_error');
             }
         }
-    }
-
-    private function api_put($endpoint, $data) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
-        $response = wp_remote_request($base_url . $endpoint, [
-            'method'  => 'PUT',
-            'headers' => ['Content-Type' => 'application/json', 'X-Site-URL' => site_url(), 'X-License-Key' => get_option('oneclick_license_key', '')],
-            'body'    => wp_json_encode($data),
-            'timeout' => 30,
-        ]);
-        if (is_wp_error($response)) return $response;
-        $code = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        return ($code >= 200 && $code < 300) ? ($body ?? []) : new WP_Error('api_error', $body['detail'] ?? 'Unknown error');
-    }
-
-    private function api_patch($endpoint) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
-        $response = wp_remote_request($base_url . $endpoint, [
-            'method'  => 'PATCH',
-            'headers' => ['Content-Type' => 'application/json', 'X-Site-URL' => site_url(), 'X-License-Key' => get_option('oneclick_license_key', '')],
-            'timeout' => 30,
-        ]);
-        if (is_wp_error($response)) return $response;
-        $code = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        return ($code >= 200 && $code < 300) ? ($body ?? []) : new WP_Error('api_error', $body['detail'] ?? 'Unknown error');
-    }
-
-    private function api_delete($endpoint) {
-        $base_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
-        $response = wp_remote_request($base_url . $endpoint, [
-            'method'  => 'DELETE',
-            'headers' => ['Content-Type' => 'application/json', 'X-Site-URL' => site_url(), 'X-License-Key' => get_option('oneclick_license_key', '')],
-            'timeout' => 30,
-        ]);
-        if (is_wp_error($response)) return $response;
-        $code = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        return ($code >= 200 && $code < 300) ? ($body ?? []) : new WP_Error('api_error', $body['detail'] ?? 'Unknown error');
     }
 }

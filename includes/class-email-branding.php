@@ -1,8 +1,8 @@
 <?php
 /**
- * Email Branding Admin Page
+ * Email and purchase experience branding admin page
  *
- * Admin UI for customizing email branding: logo, colors, texts, preview.
+ * Admin UI for customizing customer email and purchase window branding.
  * Includes Domain Setup section for subdomain/custom domain configuration.
  * Communicates with backend via OneClick_API_Client.
  *
@@ -32,7 +32,7 @@ class OneClick_Email_Branding {
     public function add_submenu() {
         add_submenu_page(
             'oneclick-settings',
-            __('Email Branding', 'woo-oneclick'),
+            __('Email & Purchase Branding', 'woo-oneclick'),
             __('Branding', 'woo-oneclick'),
             'manage_woocommerce',
             self::MENU_SLUG,
@@ -162,22 +162,22 @@ class OneClick_Email_Branding {
         $data = [
             'site_url'             => site_url(),
             'logo_url'             => esc_url_raw($_POST['logo_url'] ?? ''),
-            'primary_color'        => sanitize_hex_color($_POST['primary_color'] ?? '#2c5282'),
-            'secondary_color'      => sanitize_hex_color($_POST['secondary_color'] ?? '#f8f9fa'),
-            'background_color'     => sanitize_hex_color($_POST['background_color'] ?? '#f5f5f5'),
-            'text_color'           => sanitize_hex_color($_POST['text_color'] ?? '#333333'),
+            'primary_color'        => sanitize_hex_color($_POST['primary_color'] ?? '#5b3cdd'),
+            'secondary_color'      => sanitize_hex_color($_POST['secondary_color'] ?? '#e9edff'),
+            'background_color'     => sanitize_hex_color($_POST['background_color'] ?? '#f9f9ff'),
+            'text_color'           => sanitize_hex_color($_POST['text_color'] ?? '#141b2b'),
             'accent_color'         => sanitize_hex_color($_POST['accent_color'] ?? ''),
             'button_color'         => sanitize_hex_color($_POST['button_color'] ?? ''),
             'button_text_color'    => sanitize_hex_color($_POST['button_text_color'] ?? '#ffffff'),
             'button_text'          => sanitize_text_field($_POST['button_text'] ?? 'Buy Now with One Click'),
-            'button_border_radius' => absint($_POST['button_border_radius'] ?? 6),
+            'button_border_radius' => absint($_POST['button_border_radius'] ?? 14),
             'company_name'         => sanitize_text_field($_POST['company_name'] ?? ''),
             'sender_name'          => sanitize_text_field($_POST['sender_name'] ?? ''),
             'sender_email'         => sanitize_email($_POST['sender_email'] ?? ''),
             'header_text'          => sanitize_text_field($_POST['header_text'] ?? ''),
             'body_text'            => wp_kses_post($_POST['body_text'] ?? ''),
             'footer_text'          => sanitize_text_field($_POST['footer_text'] ?? ''),
-            'font_family'          => sanitize_text_field($_POST['font_family'] ?? 'Arial, sans-serif'),
+            'font_family'          => sanitize_text_field($_POST['font_family'] ?? 'Manrope, Arial, sans-serif'),
         ];
 
         $api = OneClick_API_Client::instance();
@@ -219,27 +219,39 @@ class OneClick_Email_Branding {
         // Defaults
         $b = wp_parse_args($branding, [
             'logo_url'             => '',
-            'primary_color'        => '#2c5282',
-            'secondary_color'      => '#f8f9fa',
-            'background_color'     => '#f5f5f5',
-            'text_color'           => '#333333',
+            'primary_color'        => '#5b3cdd',
+            'secondary_color'      => '#e9edff',
+            'background_color'     => '#f9f9ff',
+            'text_color'           => '#141b2b',
             'accent_color'         => '',
             'button_color'         => '',
             'button_text_color'    => '#ffffff',
             'button_text'          => 'Buy Now with One Click',
-            'button_border_radius' => 6,
+            'button_border_radius' => 14,
             'company_name'         => '',
             'sender_name'          => '',
             'sender_email'         => '',
             'header_text'          => '',
             'body_text'            => '',
             'footer_text'          => '',
-            'font_family'          => 'Arial, sans-serif',
+            'font_family'          => 'Manrope, Arial, sans-serif',
         ]);
 
-        // Preview URL
+        // Preview URL — fetch a short-lived signed token from backend
+        // (iframe can't send custom headers, so we use a preview_token query param)
         $backend_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
-        $preview_url = $backend_url . '/api/branding/preview?' . http_build_query(['site_url' => site_url()]);
+        $api = OneClick_API_Client::instance();
+        $token_result = $api->post('/api/branding/preview-token', ['site_url' => site_url()]);
+        $preview_token = '';
+        if (!is_wp_error($token_result) && !empty($token_result['preview_token'])) {
+            $preview_token = $token_result['preview_token'];
+        } else {
+            error_log('OneClick Branding: Failed to fetch preview token: ' . (is_wp_error($token_result) ? $token_result->get_error_message() : 'empty response'));
+        }
+        $preview_url = $backend_url . '/api/branding/preview?' . http_build_query([
+            'site_url' => site_url(),
+            'preview_token' => $preview_token,
+        ]);
 
         // Notices
         if (isset($_GET['saved'])) {
@@ -254,7 +266,8 @@ class OneClick_Email_Branding {
         }
         ?>
         <div class="wrap">
-            <h1><?php _e('Email Branding', 'woo-oneclick'); ?></h1>
+            <h1><?php _e('Email & Purchase Branding', 'woo-oneclick'); ?></h1>
+            <p class="description"><?php _e('These settings style customer emails and the timed purchase window. Email copy fields still apply to email content only.', 'woo-oneclick'); ?></p>
 
             <!-- ============================================================ -->
             <!-- DOMAIN SETUP SECTION                                         -->
@@ -460,7 +473,7 @@ class OneClick_Email_Branding {
                                 <td>
                                     <select id="font_family" name="font_family">
                                         <?php
-                                        $fonts = ['Arial, sans-serif', 'Helvetica, sans-serif', 'Georgia, serif', 'Verdana, sans-serif', 'Tahoma, sans-serif'];
+                                        $fonts = ['Manrope, Arial, sans-serif', 'Arial, sans-serif', 'Helvetica, sans-serif', 'Georgia, serif', 'Verdana, sans-serif', 'Tahoma, sans-serif'];
                                         foreach ($fonts as $font): ?>
                                             <option value="<?php echo esc_attr($font); ?>" <?php selected($b['font_family'], $font); ?>><?php echo esc_html($font); ?></option>
                                         <?php endforeach; ?>
@@ -475,8 +488,8 @@ class OneClick_Email_Branding {
 
                 <!-- Preview Panel -->
                 <div class="oneclick-branding-preview">
-                    <h2><?php _e('Email Preview', 'woo-oneclick'); ?></h2>
-                    <p class="description"><?php _e('Save branding first, then refresh preview.', 'woo-oneclick'); ?></p>
+                    <h2><?php _e('Customer Email Preview', 'woo-oneclick'); ?></h2>
+                    <p class="description"><?php _e('Save branding first, then refresh preview. The purchase window uses the same visual colors, logo, font, and button styling.', 'woo-oneclick'); ?></p>
                     <button type="button" class="button oneclick-refresh-preview"><?php _e('Refresh Preview', 'woo-oneclick'); ?></button>
                     <div style="margin-top:10px;">
                         <iframe id="oneclick-preview-frame" src="<?php echo esc_url($preview_url); ?>" style="width:100%; height:600px; border:1px solid #ccd0d4; border-radius:4px;"></iframe>

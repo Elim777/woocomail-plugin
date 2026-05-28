@@ -289,12 +289,20 @@ class OneClick_Stripe_Reconciliation {
      * @return string|false
      */
     private function get_stripe_secret_key() {
-        $stripe_settings = get_option('woocommerce_stripe_settings');
-        if (!empty($stripe_settings['secret_key'])) {
-            return $stripe_settings['secret_key'];
+        if ((int) get_option('oneclick_use_woocommerce_stripe_keys', 0) !== 1) {
+            return false;
         }
 
-        $key = get_option('oneclick_stripe_secret_key');
+        $stripe_settings = get_option('woocommerce_stripe_settings', []);
+        if (empty($stripe_settings['enabled']) || $stripe_settings['enabled'] !== 'yes') {
+            return false;
+        }
+
+        $test_mode = !empty($stripe_settings['testmode']) && $stripe_settings['testmode'] === 'yes';
+        $key = $test_mode
+            ? ($stripe_settings['test_secret_key'] ?? '')
+            : ($stripe_settings['secret_key'] ?? '');
+
         return !empty($key) ? $key : false;
     }
 }

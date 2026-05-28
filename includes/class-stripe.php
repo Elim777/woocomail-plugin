@@ -17,23 +17,30 @@ class OneClick_Stripe {
     /**
      * Get Stripe API key
      *
-     * Uses WooCommerce Stripe settings if available, otherwise plugin settings
+     * Uses WooCommerce Stripe Gateway settings only after explicit consent.
+     * OneClick does not store separate merchant Stripe API keys.
      *
      * @return string|false Stripe secret key or false
      */
     private function get_stripe_secret_key() {
-        // Try WooCommerce Stripe gateway settings first
-        $stripe_settings = get_option('woocommerce_stripe_settings');
-
-        if (!empty($stripe_settings['secret_key'])) {
-            return $stripe_settings['secret_key'];
+        if ((int) get_option('oneclick_use_woocommerce_stripe_keys', 0) !== 1) {
+            error_log('OneClick Stripe: WooCommerce Stripe key usage not allowed in OneClick settings');
+            return false;
         }
 
-        // Fallback to plugin settings
-        $secret_key = get_option('oneclick_stripe_secret_key');
+        $stripe_settings = get_option('woocommerce_stripe_settings', []);
+        if (empty($stripe_settings['enabled']) || $stripe_settings['enabled'] !== 'yes') {
+            error_log('OneClick Stripe: WooCommerce Stripe Gateway is not enabled');
+            return false;
+        }
+
+        $test_mode = !empty($stripe_settings['testmode']) && $stripe_settings['testmode'] === 'yes';
+        $secret_key = $test_mode
+            ? ($stripe_settings['test_secret_key'] ?? '')
+            : ($stripe_settings['secret_key'] ?? '');
 
         if (empty($secret_key)) {
-            error_log('OneClick Stripe: No secret key configured');
+            error_log('OneClick Stripe: WooCommerce Stripe secret key is not configured');
             return false;
         }
 
@@ -107,7 +114,7 @@ class OneClick_Stripe {
      * @param array $metadata Additional metadata for the payment
      * @return array ['success' => bool, 'payment_intent_id' => string, 'error' => string]
      */
-    public function charge_saved_payment_method($user_id, $amount, $currency = 'USD', $metadata = []) {
+    public function charge_saved_payment_method($user_id, $amount, $currency = 'USD', $metadata = [], $idempotency_key = null) {
         try {
             // Get Stripe secret key
             $secret_key = $this->get_stripe_secret_key();
@@ -142,10 +149,11 @@ class OneClick_Stripe {
 
             // Create Payment Intent with off_session flag (MIT)
             $response = wp_remote_post('https://api.stripe.com/v1/payment_intents', [
-                'headers' => [
-                    'Authorization' => 'Bearer ' . $secret_key,
-                    'Content-Type' => 'application/x-www-form-urlencoded'
-                ],
+                'headers' => array_filter([
+                    'Authorization'  => 'Bearer ' . $secret_key,
+                    'Content-Type'   => 'application/x-www-form-urlencoded',
+                    'Idempotency-Key' => $idempotency_key,
+                ]),
                 'body' => http_build_query([
                     'amount' => $amount_cents,
                     'currency' => strtolower($currency),
@@ -341,5 +349,59 @@ If you did not attempt this purchase, please ignore this email.', 'woo-oneclick'
             $customer_id = get_user_meta($user_id, 'stripe_customer_id', true);
         }
         return $customer_id ?: false;
+    }
+
+    /**
+     * Refund a payment intent
+     *
+     * Used when Stripe charge succeeded but order creation failed,
+     * to prevent orphaned charges.
+     *
+     * @param string $payment_intent_id Stripe Payment Intent ID
+     * @return array Result with 'success' and 'refund_id' or 'error'
+     */
+    public function refund_payment($payment_intent_id) {
+        $secret_key = $this->get_stripe_secret_key();
+        if (!$secret_key) {
+            return ['success' => false, 'error' => 'Stripe not configured'];
+        }
+
+        try {
+            $response = wp_remote_post('https://api.stripe.com/v1/refunds', [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $secret_key,
+                    'Content-Type' => 'application/x-www-form-urlencoded'
+                ],
+                'body' => http_build_query([
+                    'payment_intent' => $payment_intent_id,
+                ]),
+                'timeout' => 30,
+            ]);
+
+            if (is_wp_error($response)) {
+                error_log('OneClick Stripe Refund: API error: ' . $response->get_error_message());
+                return ['success' => false, 'error' => $response->get_error_message()];
+            }
+
+            $data = json_decode(wp_remote_retrieve_body($response), true);
+            $status_code = wp_remote_retrieve_response_code($response);
+
+            if ($status_code === 200 && isset($data['id'])) {
+                error_log(sprintf(
+                    'OneClick Stripe: Refund created for PI %s (Refund: %s)',
+                    $payment_intent_id,
+                    $data['id']
+                ));
+                return ['success' => true, 'refund_id' => $data['id']];
+            }
+
+            $error = $data['error']['message'] ?? 'Unknown refund error';
+            error_log(sprintf('OneClick Stripe Refund failed for PI %s: %s', $payment_intent_id, $error));
+            return ['success' => false, 'error' => $error];
+
+        } catch (Exception $e) {
+            error_log('OneClick Stripe Refund Exception: ' . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
 }

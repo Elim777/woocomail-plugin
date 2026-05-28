@@ -154,6 +154,64 @@ class OneClick_API_Client {
     }
 
     /**
+     * Send PUT request to backend
+     *
+     * @param string $endpoint API endpoint
+     * @param array  $data     Request body (will be JSON-encoded)
+     * @return array|WP_Error
+     */
+    public function put($endpoint, $data = []) {
+        $url = $this->base_url . $endpoint;
+
+        $response = wp_remote_request($url, [
+            'method'  => 'PUT',
+            'headers' => $this->get_headers(),
+            'body'    => wp_json_encode($data),
+            'timeout' => $this->timeout,
+        ]);
+
+        return $this->handle_response($response, $endpoint);
+    }
+
+    /**
+     * Send PATCH request to backend
+     *
+     * @param string $endpoint API endpoint
+     * @param array  $data     Optional request body
+     * @return array|WP_Error
+     */
+    public function patch($endpoint, $data = []) {
+        $url = $this->base_url . $endpoint;
+
+        $response = wp_remote_request($url, [
+            'method'  => 'PATCH',
+            'headers' => $this->get_headers(),
+            'body'    => !empty($data) ? wp_json_encode($data) : null,
+            'timeout' => $this->timeout,
+        ]);
+
+        return $this->handle_response($response, $endpoint);
+    }
+
+    /**
+     * Send DELETE request to backend
+     *
+     * @param string $endpoint API endpoint
+     * @return array|WP_Error
+     */
+    public function delete($endpoint) {
+        $url = $this->base_url . $endpoint;
+
+        $response = wp_remote_request($url, [
+            'method'  => 'DELETE',
+            'headers' => $this->get_headers(),
+            'timeout' => $this->timeout,
+        ]);
+
+        return $this->handle_response($response, $endpoint);
+    }
+
+    /**
      * Get backend base URL
      *
      * @return string

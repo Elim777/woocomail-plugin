@@ -1,206 +1,282 @@
 # WooCommerce One-Click Purchase Plugin
 
-WordPress/WooCommerce plugin enabling one-click email purchases with post-purchase campaign automation. Works as a thin client with a FastAPI backend.
+WordPress/WooCommerce plugin for post-purchase email campaigns, public one-click marketing links, timed purchase windows, Stripe MIT execution, checkout fallback, abandoned cart recovery, periodic reminders, branding, and AI-assisted campaign setup.
 
-## Overview
+The plugin is the WordPress-side execution layer. The FastAPI backend is the source of truth for rules, public links, offers, opaque claims, purchase sessions, timing, branding data, email delivery, and licensing.
 
-When a customer completes a purchase, the plugin evaluates campaign rules and sends targeted email offers. Customers can complete additional purchases with a single click using their saved payment method - no checkout required.
+## Current Architecture
 
-## Quick Start
-
-### Prerequisites
-- PHP 8.1+ with Sodium extension
-- WordPress 6.4+
-- WooCommerce 7.5+
-- [Backend API](https://github.com/YOUR_ORG/woo-oneclick-backend) running
-- Stripe account (for payment processing)
-- Redis (optional, recommended for production)
-
-### Installation
-
-1. **Upload plugin files**
-   ```
-   wp-content/plugins/woo-oneclick-purchase/
-   ```
-
-2. **Install PHP dependencies**
-   ```bash
-   cd wp-content/plugins/woo-oneclick-purchase
-   php composer.phar install
-   ```
-
-3. **Activate plugin** in WordPress admin (Plugins page)
-
-4. **Configure settings** (One-Click > Settings):
-   - Set Backend URL (your FastAPI backend)
-   - Add Stripe API keys
-   - (Optional) Configure Redis for token blacklist
-
-5. **Verify setup** (One-Click > Compatibility):
-   - Run system checks
-   - Send test email
-
-### First Campaign Setup
-
-1. Go to **One-Click > Triggers** - Create a trigger (e.g., "Customer buys Dog Food")
-2. Go to **One-Click > Actions** - Create an offer (e.g., "Send email offering Dog Leash with 10% off")
-3. Go to **One-Click > Scenarios** - Connect the trigger to the offer
-4. A customer completes a purchase matching the trigger -> email is sent automatically
-
-## How It Works
-
-```
-1. Customer completes purchase in WooCommerce
-2. Plugin detects order → sends to backend for rule evaluation
-3. Backend matches rules → returns applicable offers
-4. Plugin schedules email (with optional delay)
-5. Backend sends branded email with one-click purchase link
-6. Customer clicks link → arrives at plugin REST endpoint
-7. Plugin verifies JWT → charges saved payment method
-8. New order created automatically → success page shown
+```text
+Browser
+  |
+  | clicks, redirects, WordPress cookies, session cookies
+  v
+WordPress + WooCommerce plugin
+  |
+  | outbound HTTPS JSON
+  | X-License-Key + X-Site-URL on protected calls
+  v
+FastAPI backend
 ```
 
-## Features
+The plugin owns:
 
-| Feature | Description | Tier |
-|---------|-------------|------|
-| **Purchase Triggers** | Auto-trigger on order completion | FREE |
-| **Email Offers** | Customizable product offers with discounts | FREE |
-| **One-Click Payments** | Stripe MIT (off-session) charges | FREE |
-| **COD/BACS Support** | Cash on delivery and bank transfer | FREE |
-| **Campaign Rules** | Flexible trigger → action mapping | FREE |
-| **Token Security** | EdDSA JWT with replay prevention | FREE |
-| **HPOS Compatible** | WooCommerce High-Performance Order Storage | FREE |
-| **Email Branding** | Custom logo, colors, sender info | PRO |
-| **Custom Domains** | Send from your own domain | PRO |
-| **Abandoned Cart** | Auto-detect and recover abandoned carts | PRO |
-| **Periodic Reminders** | Time-based re-engagement emails | PRO |
-| **AI Setup** | AI-generated campaign suggestions | PRO |
+- WooCommerce hooks and admin UI,
+- WordPress login/nonce/cookie context,
+- public shop URL passthrough routes,
+- purchase window rendering,
+- checkout fallback,
+- Stripe MIT charge execution,
+- WooCommerce order creation,
+- Action Scheduler / WP-Cron session finalization worker.
+
+The backend owns:
+
+- rule evaluation,
+- email sending,
+- public link and offer state,
+- short ID claim,
+- opaque code exchange,
+- purchase session state and timer,
+- license and tenant validation.
+
+Security invariant:
+
+- Browser never receives backend license key.
+- Browser never receives raw JWT purchase payload.
+- Public URLs contain only opaque IDs.
+- Plugin calls backend outbound before executing payment/order logic.
+- Backend never calls inbound WordPress callbacks.
+
+## Main Purchase Flows
+
+### 1. Email Campaign Purchase Sessions
+
+Default completion mode is:
+
+```text
+oneclick_purchase_completion_mode = purchase_session
+```
+
+Flow:
+
+1. WooCommerce order event triggers `OneClick_Campaign_Trigger`.
+2. Plugin sends event context to backend `POST /api/rules/evaluate`.
+3. Backend returns matched reactions.
+4. Plugin schedules campaign email via WP-Cron.
+5. Plugin sends `POST /api/send-campaign-email` with `completion_mode=purchase_session`.
+6. Backend creates `PurchaseOffer` and `PurchaseOfferItem.short_id`.
+7. Email link points to backend `/click?id={short_id}`.
+8. Backend turns short ID into an opaque `claim_code`.
+9. Browser returns to plugin REST purchase route:
+
+   ```text
+   /wp-json/oneclick/v1/purchase?code={claim_code}
+   ```
+
+10. Plugin calls backend `POST /api/purchase/exchange-code` with license headers.
+11. Backend returns `flow=purchase_session`.
+12. Plugin sets HttpOnly session access cookie and redirects to purchase window.
+
+Compatibility value `immediate_purchase` still exists for legacy/test fallback. It uses the same opaque exchange pattern but may return immediate payload instead of a timed session.
+
+### 2. Public One-Click Marketing Links
+
+Public links are for ads, AI chatbots, posts, messages, and manual communication.
+
+Admin flow:
+
+1. Admin opens **One-Click Links**.
+2. Plugin collects WooCommerce product snapshots.
+3. Plugin calls `POST /api/public-links`.
+4. Backend creates `PublicOneClickLink.short_id`.
+5. Plugin displays shop URL:
+
+   ```text
+   https://shop.example.com/oneclick/{short_id}
+   ```
+
+Click flow:
+
+1. Browser opens `/oneclick/{short_id}`.
+2. Plugin route is passthrough only:
+   - sanitizes `short_id`,
+   - sets/refreshes anonymous `oneclick_public_visitor`,
+   - sends no license key,
+   - creates no session,
+   - performs no exchange,
+   - redirects to backend `/public-click?id={short_id}`.
+3. Backend creates `PublicOneClickClaim.claim_id`.
+4. Backend redirects browser to:
+
+   ```text
+   /oneclick/claim/{claim_code}
+   ```
+
+5. Plugin non-REST claim landing reads normal WordPress login cookies.
+6. Logged-in users must confirm via WordPress nonce before user/payment context is used.
+7. Anonymous users continue as checkout-only.
+8. Plugin exchanges claim code via licensed `POST /api/purchase/exchange-code`.
+9. Backend opens or joins a `PurchaseSession`.
+
+Session rejoin:
+
+- logged-in public user uses `user:{id}`,
+- anonymous public visitor uses stable `oneclick_public_visitor`,
+- closing and reopening the same public link during the active timer should join the same session.
+
+### 3. Purchase Window
+
+`OneClick_Purchase_Session` renders a branded timed purchase window.
+
+It provides REST routes:
+
+```text
+GET  /wp-json/oneclick/v1/session?session_id=...
+POST /wp-json/oneclick/v1/session/status
+POST /wp-json/oneclick/v1/session/add-item
+POST /wp-json/oneclick/v1/session/update-quantity
+POST /wp-json/oneclick/v1/session/remove-item
+POST /wp-json/oneclick/v1/session/extend
+POST /wp-json/oneclick/v1/session/cancel
+POST /wp-json/oneclick/v1/session/checkout
+```
+
+The browser talks only to WordPress. WordPress proxies session actions to the backend with the license key server-side.
+
+Checkout mode behavior:
+
+- before timer expires, user can click **Continue to Checkout**,
+- when checkout-mode timer reaches zero, UI auto-calls the checkout endpoint,
+- plugin adds locked-price session items to WooCommerce cart,
+- browser redirects to Woo checkout,
+- no payment or order is created before checkout.
+
+### 4. Auto Finalization
+
+`OneClick_Purchase_Session` schedules a worker through Action Scheduler when available, otherwise WP-Cron.
+
+Worker flow:
+
+1. Plugin calls `POST /api/purchase-sessions/claim-due`.
+2. Backend returns sessions that may auto-finalize.
+3. Plugin executes based on `finalization_mode`:
+   - `mit_purchase`: Stripe MIT charge + one multi-item WooCommerce order,
+   - `non_card_order`: one WooCommerce order without Stripe charge,
+   - `checkout`: not claimed by backend worker.
+4. Plugin reports result via `POST /api/purchase-sessions/report-finalization`.
 
 ## Admin Menu
 
-```
+```text
 One-Click Purchase
-├── Settings        - Backend URL, Stripe keys, license
-├── Triggers        - Campaign trigger definitions
-├── Actions         - Email offer definitions
-├── Scenarios       - Trigger → Action rules
-├── Branding        - Email design + domain setup
-├── AI Setup        - AI campaign generation (PRO)
-└── Compatibility   - System checks + test purchase
+├── Settings          Backend URL, license, Stripe, completion mode
+├── Triggers          Action definitions
+├── Actions           Offer/reaction definitions
+├── Scenarios         Trigger -> action rules
+├── One-Click Links   Public marketing links
+├── Branding          Email and purchase experience branding
+├── AI Setup          AI campaign suggestions
+├── Compatibility     System checks and test email
+└── JWT Test          Legacy/compatibility JWT diagnostics
 ```
 
 ## Plugin Structure
 
-```
+```text
 woo-oneclick-purchase/
-├── woo-oneclick-purchase.php  # Main plugin file
-├── includes/                  # PHP classes (23 files, ~6,700 lines)
-│   ├── class-api-client.php       # Backend HTTP client (Singleton)
-│   ├── class-settings.php         # Settings + license management
-│   ├── class-jwt-handler.php      # JWT generation + verification
-│   ├── class-token-blacklist.php  # Replay attack prevention
-│   ├── class-purchase-handler.php # Core purchase REST endpoint
-│   ├── class-order-creator.php    # WooCommerce order creation
-│   ├── class-stripe.php           # Stripe MIT payments
-│   ├── class-campaign-trigger.php # Campaign orchestration
-│   ├── class-actions-admin.php    # Triggers admin UI
-│   ├── class-reactions-admin.php  # Offers admin UI
-│   ├── class-rules-admin.php      # Rules admin UI
-│   ├── class-email-branding.php   # Branding + domain management
-│   ├── class-cart-tracker.php     # Abandoned cart tracking
-│   ├── class-periodic-cron.php    # Periodic email cron
-│   ├── class-ai-setup.php         # AI suggestions (PRO)
-│   └── ...
-├── assets/css/                # Admin stylesheets
-├── assets/js/                 # Admin JavaScript
-└── vendor/                    # Composer dependencies
+├── woo-oneclick-purchase.php
+├── composer.json
+├── includes/
+│   ├── class-api-client.php
+│   ├── class-settings.php
+│   ├── class-campaign-trigger.php
+│   ├── class-purchase-handler.php
+│   ├── class-purchase-session.php
+│   ├── class-public-links.php
+│   ├── class-order-creator.php
+│   ├── class-stripe.php
+│   ├── class-stripe-reconciliation.php
+│   ├── class-actions-admin.php
+│   ├── class-reactions-admin.php
+│   ├── class-rules-admin.php
+│   ├── class-product-picker.php
+│   ├── class-email-branding.php
+│   ├── class-cart-tracker.php
+│   ├── class-periodic-cron.php
+│   ├── class-ai-setup.php
+│   ├── class-compatibility-test.php
+│   ├── class-jwt-handler.php
+│   ├── class-jwt-test.php
+│   └── class-product-button.php
+├── assets/
+│   ├── css/
+│   └── js/
+├── vendor/
+└── scripts/
 ```
 
-## Security
+Removed legacy runtime pieces:
 
-- **EdDSA (Ed25519):** Modern JWT signing using native PHP Sodium
-- **Token replay prevention:** Redis-backed blacklist with Transients fallback
-- **WordPress nonces:** All forms and AJAX calls verified
-- **Capability checks:** `manage_woocommerce` required for all admin operations
-- **Input sanitization:** `sanitize_text_field()`, `absint()`, `esc_url_raw()` throughout
-- **Output escaping:** `esc_html()`, `esc_attr()`, `esc_url()` on all output
-- **HPOS compatible:** No direct database queries for orders
+- `class-token-blacklist.php`
+- `class-blacklist-test.php`
+- `class-campaign-manager.php.deprecated`
+- WordPress-side JWT-in-URL purchase flow
 
 ## Configuration
 
-### Required Settings (One-Click > Settings)
-| Setting | Description |
-|---------|-------------|
-| Backend URL | FastAPI backend address (must be HTTPS in production) |
-| Stripe Secret Key | `sk_test_*` or `sk_live_*` |
-| Stripe Publishable Key | `pk_test_*` or `pk_live_*` |
+Required settings:
 
-### Optional Settings
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Redis Host | 127.0.0.1 | For token blacklist |
-| Redis Port | 6379 | Redis port |
+| Setting | Purpose |
+|---------|---------|
+| Backend URL | FastAPI backend base URL |
+| License Key | Sent only server-side in `X-License-Key` |
+| Stripe Secret Key | Used by plugin for customer MIT charges |
+| Stripe Publishable Key | Stripe frontend/admin support |
 
-### WP-Cron Jobs
-| Schedule | Purpose |
-|----------|---------|
-| Daily | License check with backend |
-| Every 15 min | Abandoned cart detection |
-| Daily | Periodic customer reminders |
+Important options:
 
-**Production tip:** Replace WP-Cron with a real system cron:
-```
-*/15 * * * * curl -s https://your-shop.com/wp-cron.php > /dev/null 2>&1
-```
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `oneclick_backend_url` | `https://woocomail-api.onrender.com` | Backend API base URL |
+| `oneclick_purchase_completion_mode` | `purchase_session` | `purchase_session` or `immediate_purchase` |
+| `oneclick_purchase_link_mode` | `all_with_cart_fallback` | Compatibility payment behavior |
+| `oneclick_license_key` | empty | Backend license key |
 
-## Payment Methods
+## Security
 
-| Method | How It Works |
-|--------|-------------|
-| **Stripe** | Merchant Initiated Transaction - charges saved card off-session |
-| **COD** | Creates order with "processing" status (pay on delivery) |
-| **BACS** | Creates order with "on-hold" status (bank transfer pending) |
-
-## REST API
-
-The plugin registers one public REST endpoint:
-
-```
-GET /wp-json/oneclick/v1/purchase?token=<JWT>
-```
-
-This endpoint handles the actual one-click purchase when a customer clicks the email link. Security is provided by JWT verification, not WordPress authentication.
+- Public shop URL contains only backend-generated opaque `short_id`.
+- `/oneclick/{short_id}` is passthrough-only.
+- Public logged-in user context requires WordPress nonce confirmation.
+- Browser never sees backend license key.
+- Browser never sees raw JWT purchase payload.
+- Plugin sends license key only in server-side backend requests.
+- Session access token is stored in HttpOnly cookie.
+- WooCommerce orders are created only after backend session state allows execution.
+- Anonymous public sessions are checkout-only and never auto-charged.
+- Admin forms use WordPress nonces and `manage_woocommerce` capability.
+- Order creation uses WooCommerce APIs and is HPOS compatible.
 
 ## Requirements
 
 | Component | Version | Required |
 |-----------|---------|----------|
 | PHP | 8.1+ | Yes |
-| Sodium extension | - | Yes |
 | WordPress | 6.4+ | Yes |
 | WooCommerce | 7.5+ | Yes |
 | Backend API | Running | Yes |
-| Redis | Any | Recommended |
-| Stripe account | - | Yes |
+| Stripe account | Required for MIT purchases | Yes |
+| Action Scheduler | WooCommerce bundled | Preferred for session worker |
 
-## Development
+## Development Checks
 
-### Testing
-The plugin includes test pages accessible from admin:
-- JWT test page (class-jwt-test.php)
-- Token blacklist test page (class-blacklist-test.php)
-- Compatibility test page with system checks
-
-### Dependencies (Composer)
-- `predis/predis ^2.0` - Redis client for token blacklist
-- `firebase/php-jwt ^7.0` - Installed but unused (native Sodium used instead)
-
-## License
-
-Proprietary - Seventh Day Labs. All rights reserved.
+```bash
+php -l woo-oneclick-purchase.php
+find includes -name '*.php' -print0 | xargs -0 -n1 php -l
+```
 
 ## Related
 
-- [Backend API Repository](https://github.com/YOUR_ORG/woo-oneclick-backend) - FastAPI backend (business logic)
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed architecture documentation
+- Backend repository: `https://github.com/Elim777/woocomail-server-deploy`
+- Plugin repository: `https://github.com/Elim777/woocomail-plugin`
+- [ARCHITECTURE.md](ARCHITECTURE.md)

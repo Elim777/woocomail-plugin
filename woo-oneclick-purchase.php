@@ -63,10 +63,6 @@ function oneclick_check_requirements() {
         $errors[] = __('WooCommerce One-Click Purchase requires WooCommerce to be installed and active.', 'woo-oneclick');
     }
 
-    // Check if sodium extension is available (for EdDSA)
-    if (!function_exists('sodium_crypto_sign_keypair')) {
-        $errors[] = __('WooCommerce One-Click Purchase requires the Sodium PHP extension for cryptographic operations.', 'woo-oneclick');
-    }
 
     if (!empty($errors)) {
         deactivate_plugins(plugin_basename(__FILE__));
@@ -82,29 +78,24 @@ register_activation_hook(__FILE__, 'oneclick_check_requirements');
 /**
  * Plugin activation hook
  *
- * Generates EdDSA keypair on first activation
+ * All crypto is on the backend — no local keypair needed.
  */
 function oneclick_activation() {
     // Check requirements first
     oneclick_check_requirements();
 
-    // Generate EdDSA keypair if not exists
-    if (!get_option('oneclick_private_key')) {
-        // Generate Ed25519 keypair (EdDSA)
-        $keypair = sodium_crypto_sign_keypair();
-        $private_key = sodium_crypto_sign_secretkey($keypair);
-        $public_key = sodium_crypto_sign_publickey($keypair);
-
-        // Store as base64
-        update_option('oneclick_private_key', base64_encode($private_key), false); // autoload = false for security
-        update_option('oneclick_public_key', base64_encode($public_key), true);
-
-        error_log('OneClick: EdDSA keypair generated successfully');
-    }
 
     // Set default options
     if (!get_option('oneclick_backend_url')) {
         update_option('oneclick_backend_url', 'https://woocomail-api.onrender.com', true);
+    }
+
+    if (!get_option('oneclick_purchase_link_mode')) {
+        update_option('oneclick_purchase_link_mode', 'all_with_cart_fallback', true);
+    }
+
+    if (!get_option('oneclick_purchase_completion_mode')) {
+        update_option('oneclick_purchase_completion_mode', 'purchase_session', true);
     }
 
     // Schedule daily license check
@@ -120,6 +111,11 @@ function oneclick_activation() {
     // Schedule periodic customer email check (daily)
     if (!wp_next_scheduled('oneclick_periodic_check')) {
         wp_schedule_event(time(), 'daily', 'oneclick_periodic_check');
+    }
+
+    // Fallback worker schedule when Action Scheduler is unavailable.
+    if (!function_exists('as_next_scheduled_action') && !wp_next_scheduled('oneclick_process_due_purchase_sessions')) {
+        wp_schedule_event(time() + 60, 'oneclick_minutely', 'oneclick_process_due_purchase_sessions');
     }
 
     // Flush rewrite rules for REST API endpoints
@@ -153,6 +149,14 @@ function oneclick_deactivation() {
     $timestamp = wp_next_scheduled('oneclick_periodic_check');
     if ($timestamp) {
         wp_unschedule_event($timestamp, 'oneclick_periodic_check');
+    }
+
+    $timestamp = wp_next_scheduled('oneclick_process_due_purchase_sessions');
+    if ($timestamp) {
+        wp_unschedule_event($timestamp, 'oneclick_process_due_purchase_sessions');
+    }
+    if (function_exists('as_unschedule_all_actions')) {
+        as_unschedule_all_actions('oneclick_process_due_purchase_sessions', [], 'oneclick');
     }
 
     flush_rewrite_rules();
@@ -196,15 +200,14 @@ function oneclick_load_classes() {
     // Core classes
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-settings.php';
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-jwt-handler.php';
-    require_once ONECLICK_PLUGIN_DIR . 'includes/class-token-blacklist.php';
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-jwt-test.php';
-    require_once ONECLICK_PLUGIN_DIR . 'includes/class-blacklist-test.php';
 
     // Actions/Reactions/Rules admin UI (replaces old campaign system)
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-actions-admin.php';
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-reactions-admin.php';
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-rules-admin.php';
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-product-picker.php';
+    require_once ONECLICK_PLUGIN_DIR . 'includes/class-public-links.php';
 
     // Email branding admin
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-email-branding.php';
@@ -228,6 +231,7 @@ function oneclick_load_classes() {
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-stripe.php';
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-stripe-reconciliation.php';
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-order-creator.php';
+    require_once ONECLICK_PLUGIN_DIR . 'includes/class-purchase-session.php';
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-purchase-handler.php';
 
     // Product page button (LOWEST PRIORITY)
@@ -247,11 +251,11 @@ function oneclick_init() {
     // Initialize components
     new OneClick_Settings();
     new OneClick_JWT_Test();
-    new OneClick_Blacklist_Test();
     new OneClick_Actions_Admin();
     new OneClick_Reactions_Admin();
     new OneClick_Rules_Admin();
     new OneClick_Product_Picker();
+    new OneClick_Public_Links();
     new OneClick_Email_Branding();
     new OneClick_Cart_Tracker();
     new OneClick_Periodic_Cron();
@@ -259,6 +263,7 @@ function oneclick_init() {
     new OneClick_Stripe_Reconciliation();
     new OneClick_AI_Setup();
     new OneClick_Compatibility_Test();
+    new OneClick_Purchase_Session();
     new OneClick_Purchase_Handler();
 
     // Product button (only if user has payment method)
@@ -275,6 +280,10 @@ function oneclick_cron_schedules($schedules) {
     $schedules['oneclick_15min'] = [
         'interval' => 900,
         'display'  => __('Every 15 Minutes', 'woo-oneclick'),
+    ];
+    $schedules['oneclick_minutely'] = [
+        'interval' => 60,
+        'display'  => __('Every Minute', 'woo-oneclick'),
     ];
     return $schedules;
 }

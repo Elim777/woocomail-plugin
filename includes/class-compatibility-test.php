@@ -171,15 +171,6 @@ class OneClick_Compatibility_Test {
             'detail' => sprintf('Version: %s (requires >= 7.5)', $wc_version),
         ];
 
-        // Sodium Extension
-        $checks[] = [
-            'name'   => 'Sodium Extension',
-            'pass'   => function_exists('sodium_crypto_sign_keypair'),
-            'detail' => function_exists('sodium_crypto_sign_keypair')
-                ? 'Available (Ed25519 support)'
-                : 'Missing — required for JWT EdDSA signing',
-        ];
-
         // HPOS (Custom Order Tables)
         $hpos_enabled = false;
         if (class_exists(\Automattic\WooCommerce\Utilities\OrderUtil::class)) {
@@ -213,15 +204,25 @@ class OneClick_Compatibility_Test {
         ];
 
         // Stripe Gateway
-        $stripe_settings = get_option('woocommerce_stripe_settings');
+        $stripe_settings = get_option('woocommerce_stripe_settings', []);
+        $stripe_allowed = (int) get_option('oneclick_use_woocommerce_stripe_keys', 0) === 1;
         $stripe_enabled = !empty($stripe_settings['enabled']) && $stripe_settings['enabled'] === 'yes';
-        $stripe_key = !empty($stripe_settings['secret_key']) || !empty(get_option('oneclick_stripe_secret_key'));
+        $stripe_test_mode = !empty($stripe_settings['testmode']) && $stripe_settings['testmode'] === 'yes';
+        $stripe_secret_key = $stripe_test_mode
+            ? ($stripe_settings['test_secret_key'] ?? '')
+            : ($stripe_settings['secret_key'] ?? '');
+        $stripe_publishable_key = $stripe_test_mode
+            ? ($stripe_settings['test_publishable_key'] ?? '')
+            : ($stripe_settings['publishable_key'] ?? '');
+        $stripe_key = !empty($stripe_secret_key) && !empty($stripe_publishable_key);
         $checks[] = [
             'name'   => 'Stripe Gateway',
-            'pass'   => $stripe_enabled && $stripe_key,
-            'detail' => $stripe_enabled
-                ? ($stripe_key ? 'Enabled with API key' : 'Enabled but API key missing')
-                : 'Not enabled in WooCommerce',
+            'pass'   => $stripe_allowed && $stripe_enabled && $stripe_key,
+            'detail' => !$stripe_allowed
+                ? 'Not allowed in OneClick settings'
+                : ($stripe_enabled
+                    ? ($stripe_key ? 'Allowed; WooCommerce Stripe Gateway is enabled with API keys' : 'Allowed; WooCommerce Stripe Gateway is enabled but API keys are incomplete')
+                    : 'Allowed; WooCommerce Stripe Gateway is not enabled'),
         ];
 
         // Backend URL
