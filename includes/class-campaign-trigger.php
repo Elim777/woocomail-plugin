@@ -462,6 +462,14 @@ class OneClick_Campaign_Trigger {
         }
 
         $mode = apply_filters('oneclick_purchase_completion_mode', $mode, $order_id, $payload);
+        if (
+            $mode === 'immediate_purchase'
+            && class_exists('OneClick_Settings')
+            && !OneClick_Settings::immediate_purchase_enabled()
+        ) {
+            error_log('OneClick Campaign: immediate_purchase requested but disabled; using purchase_session.');
+            return 'purchase_session';
+        }
 
         return in_array($mode, ['purchase_session', 'immediate_purchase'], true)
             ? $mode

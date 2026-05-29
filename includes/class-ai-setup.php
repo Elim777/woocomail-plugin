@@ -102,6 +102,9 @@ class OneClick_AI_Setup {
                     <p class="description">
                         <?php esc_html_e('AI will analyze your products and categories to suggest optimal triggers, actions, and scenarios for your email campaigns.', 'woo-oneclick'); ?>
                     </p>
+                    <p class="description">
+                        <?php esc_html_e('Privacy note: product names, categories, store locale, currency, and shop name are sent to the OneClick backend for AI generation. Customer emails, payment data, license keys, and Stripe secrets are not sent in this AI setup request.', 'woo-oneclick'); ?>
+                    </p>
 
                     <button type="button" id="oneclick-ai-generate-btn" class="button button-primary button-hero">
                         <?php esc_html_e('Generate Suggestions', 'woo-oneclick'); ?>

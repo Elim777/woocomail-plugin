@@ -43,7 +43,7 @@ class OneClick_Public_Links {
         $args = [
             'expires'  => time() + DAY_IN_SECONDS * 30,
             'path'     => COOKIEPATH ?: '/',
-            'secure'   => false,
+            'secure'   => self::should_secure_visitor_cookie(),
             'httponly' => true,
             'samesite' => 'Lax',
         ];
@@ -51,6 +51,21 @@ class OneClick_Public_Links {
             $args['domain'] = COOKIE_DOMAIN;
         }
         setcookie(self::VISITOR_COOKIE, $key, $args);
+    }
+
+    private static function should_secure_visitor_cookie() {
+        if (!is_ssl()) {
+            return false;
+        }
+
+        $host = wp_parse_url(home_url(), PHP_URL_HOST);
+        $host = strtolower((string) $host);
+        $is_local_domain = substr($host, -6) === '.local';
+        if ($host === 'localhost' || $host === '127.0.0.1' || $is_local_domain) {
+            return false;
+        }
+
+        return true;
     }
 
     public function add_submenu() {
@@ -120,9 +135,10 @@ class OneClick_Public_Links {
         error_log('   Plugin NEVOLÁ exchange, NEPOSIELA license key, NEVYTVÁRA session, NEČÍTA produkty/ceny.');
         $visitor_key = self::get_or_create_visitor_key();
         error_log(sprintf(
-            '   Plugin nastavuje/obnovuje anonymnú visitor cookie | visitor_hash=%s... | cookie=%s | HttpOnly + SameSite=Lax.',
+            '   Plugin nastavuje/obnovuje anonymnú visitor cookie | visitor_hash=%s... | cookie=%s | HttpOnly + SameSite=Lax | Secure=%s.',
             substr(hash('sha256', $visitor_key), 0, 12),
-            self::VISITOR_COOKIE
+            self::VISITOR_COOKIE,
+            self::should_secure_visitor_cookie() ? 'yes' : 'no'
         ));
 
         nocache_headers();

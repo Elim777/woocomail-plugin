@@ -112,8 +112,26 @@ class OneClick_Settings {
     }
 
     public function sanitize_purchase_completion_mode($value) {
+        if (!self::immediate_purchase_enabled()) {
+            return 'purchase_session';
+        }
+
         $allowed = ['purchase_session', 'immediate_purchase'];
         return in_array($value, $allowed, true) ? $value : 'purchase_session';
+    }
+
+    public static function immediate_purchase_enabled() {
+        $enabled = defined('ONECLICK_ALLOW_IMMEDIATE_PURCHASE') && ONECLICK_ALLOW_IMMEDIATE_PURCHASE;
+        return (bool) apply_filters('oneclick_allow_immediate_purchase', $enabled);
+    }
+
+    private function mask_license_key($license_key) {
+        $license_key = (string) $license_key;
+        if (strlen($license_key) <= 10) {
+            return $license_key ? '****' : '';
+        }
+
+        return substr($license_key, 0, 7) . '******' . substr($license_key, -4);
     }
 
     /**
@@ -420,7 +438,7 @@ class OneClick_Settings {
 
                 <?php if (!empty($license_key)): ?>
                     <dt><?php _e('License Key', 'woo-oneclick'); ?></dt>
-                    <dd><code><?php echo esc_html($license_key); ?></code></dd>
+                    <dd><code><?php echo esc_html($this->mask_license_key($license_key)); ?></code></dd>
                 <?php endif; ?>
 
                 <?php if (!empty($max_activations)): ?>

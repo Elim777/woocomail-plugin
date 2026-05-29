@@ -591,6 +591,130 @@ class OneClick_Purchase_Session {
             background: var(--oc-surface-soft);
             padding: 24px;
         }
+        .oc-complete {
+            display: none;
+            overflow: hidden;
+        }
+        .oc-complete.is-visible { display: block; }
+        .oc-complete-hero {
+            padding: 34px 30px;
+            background: linear-gradient(135deg, color-mix(in srgb, var(--oc-primary) 10%, #ffffff), #ffffff 72%);
+            border-bottom: 1px solid var(--oc-outline-soft);
+            text-align: center;
+        }
+        .oc-complete-icon {
+            width: 68px;
+            height: 68px;
+            margin: 0 auto 18px;
+            border-radius: 999px;
+            background: var(--oc-primary);
+            color: var(--oc-button-text);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 18px 34px color-mix(in srgb, var(--oc-primary) 24%, transparent);
+        }
+        .oc-complete-kicker {
+            margin: 0 0 8px;
+            color: var(--oc-primary);
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+        .oc-complete h2 {
+            margin: 0;
+            color: var(--oc-heading);
+            font-size: 30px;
+            line-height: 1.2;
+            font-weight: 800;
+            letter-spacing: 0;
+        }
+        .oc-complete-copy {
+            max-width: 620px;
+            margin: 12px auto 0;
+            color: var(--oc-muted);
+            font-size: 15px;
+            line-height: 1.55;
+            font-weight: 500;
+        }
+        .oc-complete-body {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            gap: 24px;
+            padding: 28px;
+        }
+        .oc-complete-card {
+            border: 1px solid var(--oc-outline-soft);
+            border-radius: 20px;
+            background: var(--oc-surface);
+            padding: 22px;
+        }
+        .oc-complete-card h3 {
+            margin: 0 0 18px;
+            color: var(--oc-heading);
+            font-size: 16px;
+            line-height: 1.35;
+            font-weight: 800;
+            letter-spacing: 0;
+        }
+        .oc-complete-line {
+            display: grid;
+            grid-template-columns: 52px minmax(0, 1fr) auto;
+            gap: 14px;
+            align-items: center;
+            padding: 14px 0;
+            border-top: 1px solid var(--oc-outline-soft);
+        }
+        .oc-complete-line:first-child { border-top: 0; padding-top: 0; }
+        .oc-complete-line:last-child { padding-bottom: 0; }
+        .oc-complete-line strong {
+            display: block;
+            color: var(--oc-heading);
+            font-size: 14px;
+            line-height: 1.35;
+            font-weight: 750;
+        }
+        .oc-complete-line span {
+            display: block;
+            margin-top: 3px;
+            color: var(--oc-muted);
+            font-size: 12px;
+            line-height: 1.35;
+            font-weight: 600;
+        }
+        .oc-complete-price {
+            color: var(--oc-heading);
+            font-size: 14px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .oc-summary-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 13px 0;
+            border-top: 1px solid var(--oc-outline-soft);
+            color: var(--oc-muted);
+            font-size: 13px;
+            line-height: 1.35;
+            font-weight: 700;
+        }
+        .oc-summary-row:first-of-type { border-top: 0; padding-top: 0; }
+        .oc-summary-row strong {
+            color: var(--oc-heading);
+            font-weight: 800;
+            text-align: right;
+        }
+        .oc-summary-total {
+            margin-top: 8px;
+            padding-top: 18px;
+            border-top: 1px solid var(--oc-outline);
+        }
+        .oc-summary-total strong {
+            color: var(--oc-primary);
+            font-size: 22px;
+        }
         .oc-footer {
             border-top: 1px solid var(--oc-outline-soft);
             color: var(--oc-muted);
@@ -602,6 +726,7 @@ class OneClick_Purchase_Session {
         @media (max-width: 960px) {
             .oc-main { grid-template-columns: 1fr; }
             .oc-sidebar { position: static; }
+            .oc-complete-body { grid-template-columns: 1fr; }
         }
         @media (max-width: 640px) {
             .oc-shell { padding: 18px 16px; }
@@ -616,6 +741,12 @@ class OneClick_Purchase_Session {
             .oc-products { grid-template-columns: 1fr; }
             .oc-total-box { align-items: flex-start; flex-direction: column; }
             .oc-total-note { text-align: left; }
+            .oc-complete-hero { padding: 28px 18px; }
+            .oc-complete h2 { font-size: 24px; }
+            .oc-complete-body { padding: 18px; }
+            .oc-complete-card { padding: 18px; }
+            .oc-complete-line { grid-template-columns: 46px minmax(0, 1fr); }
+            .oc-complete-price { grid-column: 2; }
         }
     </style>
 </head>
@@ -646,7 +777,41 @@ class OneClick_Purchase_Session {
     </header>
 
     <main class="oc-shell">
-        <div class="oc-main">
+        <section class="oc-panel oc-complete" id="oc-complete" aria-live="polite">
+            <div class="oc-complete-hero">
+                <div class="oc-complete-icon" aria-hidden="true">
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 12.5l4 4L19 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <p class="oc-complete-kicker"><?php echo esc_html__('Purchase Complete', 'woo-oneclick'); ?></p>
+                <h2><?php echo esc_html__('Thank you for your order', 'woo-oneclick'); ?></h2>
+                <p class="oc-complete-copy" id="oc-complete-copy"></p>
+            </div>
+            <div class="oc-complete-body">
+                <section class="oc-complete-card">
+                    <h3><?php echo esc_html__('Purchased items', 'woo-oneclick'); ?></h3>
+                    <div id="oc-complete-items"></div>
+                </section>
+                <aside class="oc-complete-card">
+                    <h3><?php echo esc_html__('Order summary', 'woo-oneclick'); ?></h3>
+                    <div class="oc-summary-row">
+                        <span><?php echo esc_html__('Order', 'woo-oneclick'); ?></span>
+                        <strong id="oc-complete-order">--</strong>
+                    </div>
+                    <div class="oc-summary-row">
+                        <span><?php echo esc_html__('Items', 'woo-oneclick'); ?></span>
+                        <strong id="oc-complete-count">0</strong>
+                    </div>
+                    <div class="oc-summary-row oc-summary-total">
+                        <span><?php echo esc_html__('Total paid', 'woo-oneclick'); ?></span>
+                        <strong id="oc-complete-total">--</strong>
+                    </div>
+                </aside>
+            </div>
+        </section>
+
+        <div class="oc-main" id="oc-active-layout">
             <section class="oc-panel oc-products-panel">
                 <div class="oc-panel-head">
                     <div>
@@ -719,6 +884,13 @@ class OneClick_Purchase_Session {
         var extend = document.getElementById("oc-extend");
         var checkout = document.getElementById("oc-checkout");
         var cancel = document.getElementById("oc-cancel");
+        var activeLayout = document.getElementById("oc-active-layout");
+        var completeView = document.getElementById("oc-complete");
+        var completeCopy = document.getElementById("oc-complete-copy");
+        var completeItems = document.getElementById("oc-complete-items");
+        var completeOrder = document.getElementById("oc-complete-order");
+        var completeCount = document.getElementById("oc-complete-count");
+        var completeTotal = document.getElementById("oc-complete-total");
         var checkoutRedirectStarted = false;
         var checkoutAutoAttempted = false;
         var checkoutRedirectFailed = false;
@@ -784,6 +956,50 @@ class OneClick_Purchase_Session {
             });
             return selected;
         }
+        function itemQuantityTotal() {
+            return (state.items || []).reduce(function(sum, item) {
+                return sum + Number(item.quantity || 0);
+            }, 0);
+        }
+        function renderCompleteView() {
+            activeLayout.style.display = "none";
+            completeView.classList.add("is-visible");
+            timer.textContent = "Complete";
+            status.textContent = "Order created. Order #" + (state.order_id || "");
+            completeCopy.textContent = state.order_id
+                ? "Your purchase was completed and WooCommerce order #" + state.order_id + " was created."
+                : "Your purchase was completed and the order was created in WooCommerce.";
+            completeOrder.textContent = state.order_id ? "#" + state.order_id : "Created";
+            completeCount.textContent = String(itemQuantityTotal());
+            completeTotal.textContent = money(state.total, state.currency);
+            completeItems.innerHTML = "";
+
+            (state.items || []).forEach(function(item) {
+                var line = document.createElement("div");
+                line.className = "oc-complete-line";
+
+                var thumb = document.createElement("div");
+                thumb.className = "oc-thumb";
+                setImage(thumb, item.image_url, item.product_name);
+                line.appendChild(thumb);
+
+                var detail = document.createElement("div");
+                var title = document.createElement("strong");
+                title.textContent = item.product_name;
+                detail.appendChild(title);
+                var meta = document.createElement("span");
+                meta.textContent = "Qty " + item.quantity + " · " + money(item.price, item.currency) + " each";
+                detail.appendChild(meta);
+                line.appendChild(detail);
+
+                var lineTotal = document.createElement("div");
+                lineTotal.className = "oc-complete-price";
+                lineTotal.textContent = money(Number(item.price || 0) * Number(item.quantity || 1), item.currency);
+                line.appendChild(lineTotal);
+
+                completeItems.appendChild(line);
+            });
+        }
         function redirectToCheckout(isAuto) {
             if (checkoutRedirectStarted || state.status !== "active" || !(state.items || []).length) {
                 return;
@@ -813,7 +1029,7 @@ class OneClick_Purchase_Session {
         }
         function tick() {
             if (state.status !== "active") {
-                timer.textContent = state.status.toUpperCase();
+                timer.textContent = state.status === "finalized" ? "Complete" : state.status.toUpperCase();
                 return;
             }
             var remaining = currentRemaining();
@@ -834,12 +1050,16 @@ class OneClick_Purchase_Session {
             timer.textContent = m + ":" + s;
         }
         function render() {
+            if (state.status === "finalized") {
+                renderCompleteView();
+                return;
+            }
+            activeLayout.style.display = "";
+            completeView.classList.remove("is-visible");
             tick();
             products.innerHTML = "";
             items.innerHTML = "";
-            if (state.status === "finalized") {
-                status.textContent = "Order created. Order #" + (state.order_id || "");
-            } else if (state.status === "cancelled") {
+            if (state.status === "cancelled") {
                 status.textContent = "This purchase window was cancelled.";
             } else if (state.status === "failed") {
                 status.textContent = "Finalization failed: " + (state.error_message || "unknown error");
@@ -1092,6 +1312,7 @@ class OneClick_Purchase_Session {
             $session['session_id'] ?? '',
             count($session['items'] ?? [])
         ));
+        $this->report_checkout_redirect($body, $session);
 
         return rest_ensure_response([
             'success' => true,
@@ -1350,6 +1571,31 @@ class OneClick_Purchase_Session {
 
     private function backend_session_post($endpoint, $body, $args = []) {
         return OneClick_API_Client::instance()->post($endpoint, $body, $args);
+    }
+
+    private function report_checkout_redirect($body, $session) {
+        $session_id = sanitize_text_field($body['session_id'] ?? '');
+        $access_token = sanitize_text_field($body['access_token'] ?? '');
+        if (empty($session_id) || empty($access_token)) {
+            return;
+        }
+
+        $result = $this->backend_session_post('/api/purchase-sessions/report-checkout-redirect', [
+            'site_url' => site_url(),
+            'session_id' => $session_id,
+            'access_token' => $access_token,
+        ]);
+
+        if (is_wp_error($result)) {
+            error_log('OneClick Checkout Redirect: report failed — ' . $result->get_error_message());
+            return;
+        }
+
+        error_log(sprintf(
+            '   Checkout redirect report OK | session_id=%s | finalization_mode=%s',
+            $session_id,
+            $session['finalization_mode'] ?? 'unknown'
+        ));
     }
 
     private function get_access_token_for_session($session_id) {
