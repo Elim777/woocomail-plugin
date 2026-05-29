@@ -159,6 +159,11 @@ class OneClick_Public_Links {
             get_current_user_id() ?: 'anonymous'
         ));
 
+        if (is_user_logged_in() && current_user_can('manage_woocommerce')) {
+            error_log('   WordPress user má manage_woocommerce capability. Public shopper identity sa nepoužije; pokračuje anonymous routing.');
+            $this->exchange_public_claim($claim_code, false, true);
+        }
+
         if (is_user_logged_in()) {
             error_log('   Logged-in user rozpoznaný na non-REST route. Plugin bez extra confirmation pripraví server-side user/payment context.');
             $this->exchange_public_claim($claim_code, true, false);
