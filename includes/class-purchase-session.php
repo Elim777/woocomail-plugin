@@ -16,7 +16,11 @@ class OneClick_Purchase_Session {
 
     const WORKER_HOOK = 'oneclick_process_due_purchase_sessions';
 
-    public function __construct() {
+    public function __construct($register_hooks = true) {
+        if (!$register_hooks) {
+            return;
+        }
+
         add_action('rest_api_init', [$this, 'register_routes']);
         add_action('init', [$this, 'schedule_worker']);
         add_action(self::WORKER_HOOK, [$this, 'process_due_sessions']);
@@ -1048,6 +1052,13 @@ class OneClick_Purchase_Session {
             return $cart_ready;
         }
 
+        $session_id = sanitize_text_field($session['session_id'] ?? '');
+        foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) {
+            if (!empty($cart_item['oneclick_session_id']) && $cart_item['oneclick_session_id'] === $session_id) {
+                WC()->cart->remove_cart_item($cart_item_key);
+            }
+        }
+
         foreach (($session['items'] ?? []) as $item) {
             $product_id = (int) ($item['product_id'] ?? 0);
             $quantity = max(1, (int) ($item['quantity'] ?? 1));
@@ -1069,7 +1080,7 @@ class OneClick_Purchase_Session {
             WC()->cart->add_to_cart($add_product_id, $quantity, $variation_id, $variation, [
                 'oneclick_purchase' => 'yes',
                 'oneclick_price' => $price,
-                'oneclick_session_id' => sanitize_text_field($session['session_id'] ?? ''),
+                'oneclick_session_id' => $session_id,
                 'oneclick_public_link' => ($session['source_type'] ?? '') === 'public_link' ? 'yes' : 'no',
                 'oneclick_unique_key' => wp_hash($product_id . '|' . $price . '|' . microtime(true)),
             ]);
@@ -1086,6 +1097,52 @@ class OneClick_Purchase_Session {
             'success' => true,
             'checkout_url' => wc_get_checkout_url(),
         ]);
+    }
+
+    public function redirect_to_checkout_for_session_payload($payload) {
+        $session_id = sanitize_text_field($payload['session_id'] ?? '');
+        $access_token = sanitize_text_field($payload['access_token'] ?? '');
+
+        if (empty($session_id) || empty($access_token)) {
+            return $this->render_error_page(
+                __('Invalid Session', 'woo-oneclick'),
+                __('Could not prepare checkout for this one-click link.', 'woo-oneclick')
+            );
+        }
+
+        if (($payload['finalization_mode'] ?? '') !== 'checkout') {
+            return $this->render_error_page(
+                __('Checkout Unavailable', 'woo-oneclick'),
+                __('This one-click link is not a checkout fallback session.', 'woo-oneclick')
+            );
+        }
+
+        self::set_session_cookie($session_id, $access_token);
+        $result = $this->handle_checkout_redirect([
+            'site_url' => site_url(),
+            'session_id' => $session_id,
+            'access_token' => $access_token,
+        ]);
+
+        if (is_wp_error($result)) {
+            return $this->render_error_page(
+                __('Checkout Unavailable', 'woo-oneclick'),
+                $result->get_error_message()
+            );
+        }
+
+        $data = $result instanceof WP_REST_Response ? $result->get_data() : $result;
+        $checkout_url = esc_url_raw($data['checkout_url'] ?? '');
+        if (empty($checkout_url)) {
+            return $this->render_error_page(
+                __('Checkout Unavailable', 'woo-oneclick'),
+                __('We could not prepare the checkout redirect. Please contact support.', 'woo-oneclick')
+            );
+        }
+
+        error_log(sprintf('   ✅ Direct checkout pripravený pre session %s. Redirect: %s', $session_id, $checkout_url));
+        wp_safe_redirect($checkout_url, 302);
+        exit;
     }
 
     private function ensure_cart_available() {
@@ -1301,8 +1358,36 @@ class OneClick_Purchase_Session {
     }
 
     private function public_session_state($session) {
-        unset($session['access_token']);
-        return $session;
+        $allowed = [
+            'flow',
+            'created',
+            'session_id',
+            'offer_id',
+            'source_type',
+            'source_ref_id',
+            'finalization_mode',
+            'status',
+            'server_time',
+            'finalize_after',
+            'remaining_seconds',
+            'extend_seconds',
+            'max_extend_until',
+            'total',
+            'currency',
+            'order_id',
+            'error_message',
+            'items',
+            'offer_products',
+        ];
+
+        $public = [];
+        foreach ($allowed as $key) {
+            if (array_key_exists($key, $session)) {
+                $public[$key] = $session[$key];
+            }
+        }
+
+        return $public;
     }
 
     private function render_error_page($title, $message) {

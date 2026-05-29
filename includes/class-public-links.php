@@ -15,7 +15,7 @@ class OneClick_Public_Links {
 
     const MENU_SLUG = 'oneclick-public-links';
     const VISITOR_COOKIE = 'oneclick_public_visitor';
-    const REWRITE_VERSION = 'public-claim-v1';
+    const REWRITE_VERSION = 'public-email-claim-v2';
 
     public function __construct() {
         add_action('admin_menu', [$this, 'add_submenu']);
@@ -65,6 +65,7 @@ class OneClick_Public_Links {
     }
 
     public function add_rewrite_rule() {
+        add_rewrite_rule('^oneclick/email-claim/([A-Za-z0-9_-]{10,50})/?$', 'index.php?oneclick_email_claim_code=$matches[1]', 'top');
         add_rewrite_rule('^oneclick/claim/([A-Za-z0-9_-]{10,50})/?$', 'index.php?oneclick_public_claim_code=$matches[1]', 'top');
         add_rewrite_rule('^oneclick/([A-Za-z0-9]{8,16})/?$', 'index.php?oneclick_public_short_id=$matches[1]', 'top');
     }
@@ -72,6 +73,7 @@ class OneClick_Public_Links {
     public function add_query_vars($vars) {
         $vars[] = 'oneclick_public_short_id';
         $vars[] = 'oneclick_public_claim_code';
+        $vars[] = 'oneclick_email_claim_code';
         return $vars;
     }
 
@@ -86,6 +88,12 @@ class OneClick_Public_Links {
     }
 
     public function handle_passthrough() {
+        $email_claim_code = get_query_var('oneclick_email_claim_code');
+        if (!empty($email_claim_code)) {
+            $this->handle_email_claim_landing($email_claim_code);
+            return;
+        }
+
         $claim_code = get_query_var('oneclick_public_claim_code');
         if (!empty($claim_code)) {
             $this->handle_claim_landing($claim_code);
@@ -152,36 +160,87 @@ class OneClick_Public_Links {
         ));
 
         if (is_user_logged_in()) {
-            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-                error_log('   Logged-in user rozpoznaný. GET request iba zobrazí nonce confirmation; claim sa ešte neredeemuje.');
-                error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                error_log('');
-                $this->render_claim_confirmation($claim_code);
-            }
-
-            $nonce = isset($_POST['oneclick_public_claim_nonce'])
-                ? sanitize_text_field(wp_unslash($_POST['oneclick_public_claim_nonce']))
-                : '';
-            if (!wp_verify_nonce($nonce, 'oneclick_public_claim_' . $claim_code)) {
-                error_log('   ❌ Logged-in confirmation nonce zlyhal. Plugin NEVOLÁ exchange a claim ostáva nepoužitý do TTL.');
-                error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                error_log('');
-                status_header(403);
-                $this->render_claim_error(
-                    __('Security Check Failed', 'woo-oneclick'),
-                    __('Please open the link again and confirm the purchase window from the store page.', 'woo-oneclick')
-                );
-            }
-
-            error_log('   ✅ Logged-in confirmation nonce OK. Plugin teraz pripraví server-side user/payment context a zavolá exchange.');
-            $this->exchange_public_claim($claim_code, true);
+            error_log('   Logged-in user rozpoznaný na non-REST route. Plugin bez extra confirmation pripraví server-side user/payment context.');
+            $this->exchange_public_claim($claim_code, true, false);
         }
 
-        error_log('   Anonymous visitor. Plugin pokračuje priamo do checkout-only exchange kontextu.');
-        $this->exchange_public_claim($claim_code, false);
+        error_log('   Anonymous visitor. Plugin pokračuje do checkout-only exchange kontextu a potom použije anonymous routing policy.');
+        $this->exchange_public_claim($claim_code, false, true);
     }
 
-    private function exchange_public_claim($claim_code, $include_user_context) {
+    private function handle_email_claim_landing($claim_code) {
+        $claim_code = preg_replace('/[^A-Za-z0-9_-]/', '', (string) $claim_code);
+        if (strlen($claim_code) < 10 || strlen($claim_code) > 50) {
+            status_header(404);
+            exit;
+        }
+
+        nocache_headers();
+
+        error_log('');
+        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        error_log('🔗 EMAIL LINK FÁZA 4: WORDPRESS EMAIL CLAIM LANDING → IDENTITY GATE');
+        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        error_log(sprintf('   Browser prišiel na non-REST route /oneclick/email-claim/%s...', substr($claim_code, 0, 8)));
+        error_log(sprintf(
+            '   WordPress context: site_url=%s | home_url=%s | is_ssl=%s | is_user_logged_in=%s | current_user_id=%s',
+            site_url(),
+            home_url(),
+            is_ssl() ? 'yes' : 'no',
+            is_user_logged_in() ? 'yes' : 'no',
+            get_current_user_id() ?: 'anonymous'
+        ));
+        error_log('   Plugin pošle cookie-derived user context iba server-side v licencovanom exchange requeste.');
+
+        if (!class_exists('OneClick_Purchase_Handler')) {
+            $this->render_claim_error(
+                __('Purchase Handler Unavailable', 'woo-oneclick'),
+                __('The purchase flow could not be initialized. Please contact support.', 'woo-oneclick')
+            );
+        }
+
+        $handler = new OneClick_Purchase_Handler(false);
+        $include_user_context = is_user_logged_in();
+        $context = $handler->get_exchange_context($include_user_context);
+        $result = $handler->exchange_code_with_backend($claim_code, $context);
+
+        if (is_wp_error($result)) {
+            error_log('OneClick Email Link: exchange-code failed — ' . $result->get_error_message());
+            return $handler->render_purchase_error_page(
+                __('Invalid Purchase Link', 'woo-oneclick'),
+                __('This purchase link is invalid or has expired. Please contact support if you need assistance.', 'woo-oneclick')
+            );
+        }
+
+        if (empty($result['success']) || empty($result['payload'])) {
+            error_log('OneClick Email Link: exchange-code returned empty or unsuccessful response');
+            return $handler->render_purchase_error_page(
+                __('Invalid Purchase Link', 'woo-oneclick'),
+                __('Could not verify this purchase window. Please contact support.', 'woo-oneclick')
+            );
+        }
+
+        $payload = $result['payload'];
+        if (($payload['flow'] ?? '') !== 'purchase_session') {
+            error_log('OneClick Email Link: email claim did not return purchase_session flow');
+            return $handler->render_purchase_error_page(
+                __('Invalid Purchase Link', 'woo-oneclick'),
+                __('This email purchase link could not open a purchase window.', 'woo-oneclick')
+            );
+        }
+
+        error_log(sprintf(
+            '   Email identity gate výsledok | identity_verified=%s | finalization_mode=%s',
+            !empty($payload['identity_verified']) ? 'yes' : 'no',
+            $payload['finalization_mode'] ?? 'unknown'
+        ));
+        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        error_log('');
+
+        return $handler->redirect_to_purchase_session($payload);
+    }
+
+    private function exchange_public_claim($claim_code, $include_user_context, $route_anonymous = false) {
         if (!class_exists('OneClick_Purchase_Handler')) {
             $this->render_claim_error(
                 __('Purchase Handler Unavailable', 'woo-oneclick'),
@@ -218,41 +277,51 @@ class OneClick_Public_Links {
             );
         }
 
+        if ($route_anonymous) {
+            $anonymous_destination = sanitize_key($payload['anonymous_destination'] ?? 'checkout');
+            if ($anonymous_destination === 'product') {
+                return $this->redirect_to_primary_product($payload);
+            }
+
+            if (($payload['finalization_mode'] ?? '') === 'checkout' && class_exists('OneClick_Purchase_Session')) {
+                error_log('   Anonymous destination=checkout. Plugin naplní Woo cart a presmeruje priamo na checkout bez purchase window.');
+                $session_handler = new OneClick_Purchase_Session(false);
+                return $session_handler->redirect_to_checkout_for_session_payload($payload);
+            }
+        }
+
         return $handler->redirect_to_purchase_session($payload);
     }
 
-    private function render_claim_confirmation($claim_code) {
-        $nonce = wp_create_nonce('oneclick_public_claim_' . $claim_code);
-        $action = esc_url(home_url('/oneclick/claim/' . rawurlencode($claim_code)));
+    private function redirect_to_primary_product($payload) {
+        $items = $payload['items'] ?? [];
+        if (empty($items)) {
+            $items = $payload['offer_products'] ?? [];
+        }
 
-        header('Content-Type: text/html; charset=utf-8');
-        echo '<!doctype html>
-<html>
-<head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>' . esc_html__('Confirm Purchase Window', 'woo-oneclick') . '</title>
-    <style>
-        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:#f6f7f7;margin:0;padding:24px;min-height:100vh;display:flex;align-items:center;justify-content:center;color:#1d2327}
-        .oneclick-confirm{background:#fff;border:1px solid #dcdcde;border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.08);max-width:460px;width:100%;padding:28px;text-align:center}
-        h1{font-size:22px;line-height:1.25;margin:0 0 12px}
-        p{font-size:15px;line-height:1.5;color:#50575e;margin:0 0 22px}
-        button{background:#2271b1;border:0;border-radius:4px;color:#fff;cursor:pointer;font-size:15px;font-weight:600;padding:12px 20px;width:100%}
-        button:hover{background:#135e96}
-        a{display:inline-block;margin-top:14px;color:#50575e;text-decoration:none}
-    </style>
-</head>
-<body>
-    <main class="oneclick-confirm">
-        <h1>' . esc_html__('Open purchase window?', 'woo-oneclick') . '</h1>
-        <p>' . esc_html__('You are signed in. Confirm to open this one-click purchase window using your store account context.', 'woo-oneclick') . '</p>
-        <form method="post" action="' . $action . '">
-            <input type="hidden" name="oneclick_public_claim_nonce" value="' . esc_attr($nonce) . '">
-            <button type="submit">' . esc_html__('Continue', 'woo-oneclick') . '</button>
-        </form>
-        <a href="' . esc_url(home_url('/')) . '">' . esc_html__('Cancel', 'woo-oneclick') . '</a>
-    </main>
-</body>
-</html>';
+        $primary = null;
+        foreach ($items as $item) {
+            if (!empty($item['is_primary']) || !empty($item['selected'])) {
+                $primary = $item;
+                break;
+            }
+        }
+        if (!$primary && !empty($items[0])) {
+            $primary = $items[0];
+        }
+
+        $product_id = absint($primary['product_id'] ?? 0);
+        $product = $product_id ? wc_get_product($product_id) : null;
+        if (!$product) {
+            $this->render_claim_error(
+                __('Product Not Available', 'woo-oneclick'),
+                __('The product for this one-click link is no longer available.', 'woo-oneclick')
+            );
+        }
+
+        $url = get_permalink($product_id);
+        error_log(sprintf('   Anonymous destination=product. Plugin presmeruje na primary product #%d: %s', $product_id, $url));
+        wp_safe_redirect($url, 302);
         exit;
     }
 
@@ -407,12 +476,18 @@ class OneClick_Public_Links {
             ];
         }
 
+        $anonymous_destination = sanitize_key(wp_unslash($_POST['anonymous_destination'] ?? 'checkout'));
+        if (!in_array($anonymous_destination, ['checkout', 'product'], true)) {
+            $anonymous_destination = 'checkout';
+        }
+
         return [
             'site_url' => site_url(),
             'name' => sanitize_text_field($_POST['link_name'] ?? ''),
             'products' => $products,
             'discount_percent' => $discount_percent > 0 ? $discount_percent : null,
             'discount_type' => $discount_percent > 0 ? $discount_type : null,
+            'anonymous_destination' => $anonymous_destination,
             'status' => sanitize_text_field($_POST['link_status'] ?? 'active'),
             'expires_at' => null,
         ];
@@ -530,6 +605,16 @@ class OneClick_Public_Links {
                             <option value="active" <?php selected($link['status'] ?? 'active', 'active'); ?>><?php esc_html_e('Active', 'woo-oneclick'); ?></option>
                             <option value="disabled" <?php selected($link['status'] ?? '', 'disabled'); ?>><?php esc_html_e('Disabled', 'woo-oneclick'); ?></option>
                         </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="anonymous_destination"><?php esc_html_e('Anonymous Visitors', 'woo-oneclick'); ?></label></th>
+                    <td>
+                        <select id="anonymous_destination" name="anonymous_destination">
+                            <option value="checkout" <?php selected($link['anonymous_destination'] ?? 'checkout', 'checkout'); ?>><?php esc_html_e('Direct to Checkout', 'woo-oneclick'); ?></option>
+                            <option value="product" <?php selected($link['anonymous_destination'] ?? '', 'product'); ?>><?php esc_html_e('Primary Product Page', 'woo-oneclick'); ?></option>
+                        </select>
+                        <p class="description"><?php esc_html_e('Logged-in customers use the purchase session flow. Anonymous visitors either go straight to checkout or to the primary product page.', 'woo-oneclick'); ?></p>
                     </td>
                 </tr>
             </table>
