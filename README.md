@@ -178,7 +178,7 @@ Worker flow:
 
 ```text
 One-Click Purchase
-├── Dashboard         Read-only sessions, checkout funnel, email and guardrail metrics
+├── Dashboard         Read-only merchant funnel: emails, clicks, sessions, checkout visits, orders and technical health
 ├── Settings          Backend URL, license, Stripe, completion mode
 ├── Triggers          Action definitions
 ├── Actions           Offer/reaction definitions
@@ -271,9 +271,28 @@ Important options:
 - Checkout completion is reported from the Woo order hook for checkout sessions; the backend records completion but does not create the order or charge the payment method.
 - OneClick Dashboard data comes from licensed server-side backend requests and is read-only.
 - Dashboard/session rows are masked and do not expose access tokens, license keys, visitor keys, Stripe secrets or raw payloads.
+- Dashboard is tenant-local: the merchant sees only this WordPress site's data.
+- Client metrics mean:
+  - `Emails Sent`: campaign, cart recovery and periodic emails created by OneClick.
+  - `Links Clicked`: email link clicks plus public link clicks.
+  - `Sessions Opened`: OneClick purchase sessions started in the selected time window.
+  - `Orders Created`: WooCommerce orders attributed to OneClick.
+  - `Product Page Visits`: public anonymous shoppers sent to a product page; this is not checkout.
+  - `Checkout Visits` / `Went to Checkout`: shoppers actually sent from OneClick to WooCommerce checkout.
+  - `Auto Purchases`: saved-card or saved non-card purchase attempts.
+  - `Cancelled`: sessions cancelled by the shopper.
+  - `Abandoned`: checkout sessions that expired or reached checkout without an order.
+- Technical Health is a support section, not the main merchant KPI surface:
+  - `Due / Retry`: sessions the worker can claim.
+  - `Stale Finalizing`: sessions stuck during finalization.
+  - `Failed`: sessions requiring review.
+  - `By Finalization Mode`: technical path split; `checkout` means checkout-mode session, not necessarily an actual checkout visit.
+  - `By Source`: public link vs email campaign source split.
+  - `Public Endpoint Guard`: public endpoint calls such as `/public-click`, not purchases.
 - License keys shown in admin UI are masked unless explicitly revealed/copied.
 - AI Setup includes an admin privacy disclosure because catalog/instruction data may be sent to the configured AI provider.
 - Admin forms use WordPress nonces and `manage_woocommerce` capability.
+- Ocliby still needs a separate server-side internal admin dashboard outside the plugin. That future dashboard should show all tenants/licenses, tenant keys, activation state, per-tenant funnel counts, failed/stale sessions and public endpoint abuse signals without exposing tokens, license keys, Stripe secrets or raw payloads.
 - Order creation uses WooCommerce APIs and is HPOS compatible.
 
 ## Requirements

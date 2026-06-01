@@ -274,8 +274,11 @@ Responsibilities:
 - register the `Dashboard` submenu,
 - call licensed backend `GET /api/observability/overview`,
 - call licensed backend `GET /api/observability/sessions`,
-- render session health, checkout funnel, email engagement, public endpoint guard and recent sessions,
+- render merchant-facing funnel metrics for emails, links, sessions, checkout visits, orders and outcomes,
+- render Technical Health as a secondary support section,
 - display only masked/whitelisted backend data.
+
+The dashboard is tenant-local. It shows only the licensed WordPress site's data. A separate Ocliby server-side admin dashboard is still needed for internal multi-tenant operations across all tenants/licenses.
 
 ### `OneClick_Order_Creator`
 
@@ -539,13 +542,20 @@ Stores backend URL, license, Stripe keys, purchase link mode, and completion mod
 
 ### Dashboard
 
-Read-only operational view backed by licensed server-side backend calls:
+Read-only merchant view backed by licensed server-side backend calls:
 
-- session health by status/source/finalization mode,
-- checkout funnel: redirected, completed, abandoned, product exits,
-- email engagement: tracked sends, delivered/open/click/bounce/complaint/unsubscribe,
-- public endpoint guard hits,
-- recent sessions with safe masked fields.
+- Overview: `Emails Sent`, `Links Clicked`, `Sessions Opened`, `Orders Created`.
+- Email Campaigns: sent emails, sent product links, delivered/opened/clicked events, sessions and orders.
+- Public Links: public link clicks, sessions, product page visits, checkout visits and orders.
+- Purchase Outcomes: open now, went to checkout, auto purchases, orders created, cancelled and abandoned.
+- Recent Sessions: safe references with client-friendly labels such as `Public link`, `Email campaign`, `Saved card`, `Checkout`, `Ordered`, `Open now`.
+- Technical Health: due/retry, stale finalizing, failed, finalization mode split, source split and public endpoint guard.
+
+`checkout` in Technical Health is a finalization mode, meaning the session must use WooCommerce checkout instead of automatic purchase. `Went to Checkout` / `Checkout Visits` are counted only when OneClick actually redirects the shopper to WooCommerce checkout and reports that handoff.
+
+`Public Endpoint Guard` is a technical count of public endpoint calls such as `/public-click`. It helps support and abuse monitoring; it is not a purchase count.
+
+Roadmap: Ocliby needs a separate server-side internal admin dashboard for all tenants. It should show tenant/license lists, activation state, tenant keys, per-tenant funnels, failed/stale sessions, rate-limit and abuse signals, and safe drilldown without exposing access tokens, license keys, Stripe secrets or raw payloads.
 
 ### Triggers / Actions / Scenarios
 
