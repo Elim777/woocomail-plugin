@@ -11,6 +11,11 @@
         if (!$btn.length) return;
 
         $btn.on('click', function () {
+            if (!oneclickAiEmail.disclosureAcknowledged) {
+                alert(oneclickAiEmail.i18n.disclosureRequired);
+                return;
+            }
+
             // Collect form data
             var reactionName = $('#reaction_name').val() || '';
 

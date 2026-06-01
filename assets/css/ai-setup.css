@@ -10,6 +10,50 @@
     margin-top: 20px;
 }
 
+.oneclick-ai-disclosure {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-left: 4px solid #2271b1;
+    border-radius: 4px;
+    padding: 18px 24px;
+    margin-bottom: 20px;
+}
+
+.oneclick-ai-disclosure.needs-acknowledgement {
+    border-left-color: #d63638;
+}
+
+.oneclick-ai-disclosure h2 {
+    margin-top: 0;
+}
+
+.oneclick-ai-disclosure-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.oneclick-ai-disclosure ul {
+    list-style: disc;
+    margin-left: 18px;
+}
+
+.oneclick-ai-disclosure-status {
+    display: inline-block;
+    margin: 8px 0 0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    background: #edfaef;
+    color: #0a4b1f;
+    font-weight: 600;
+}
+
+@media (max-width: 782px) {
+    .oneclick-ai-disclosure-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Generate Section */
 .oneclick-ai-generate-section {
     background: #fff;

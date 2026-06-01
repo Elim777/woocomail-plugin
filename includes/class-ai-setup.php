@@ -16,11 +16,44 @@ if (!defined('ABSPATH')) {
 
 class OneClick_AI_Setup {
 
+    const DISCLOSURE_OPTION = 'oneclick_ai_disclosure_acknowledged';
+
     public function __construct() {
         add_action('admin_menu', [$this, 'add_menu_page']);
+        add_action('admin_init', [$this, 'handle_disclosure_acknowledgement']);
         add_action('wp_ajax_oneclick_ai_generate', [$this, 'ajax_generate']);
         add_action('wp_ajax_oneclick_ai_apply', [$this, 'ajax_apply']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
+    }
+
+    public static function is_disclosure_acknowledged() {
+        return get_option(self::DISCLOSURE_OPTION, '') === 'yes';
+    }
+
+    public static function disclosure_required_message() {
+        return __('AI features require acknowledgement of the AI privacy disclosure in OneClick > AI Setup before use.', 'woo-oneclick');
+    }
+
+    public function handle_disclosure_acknowledgement() {
+        if (!isset($_POST['oneclick_ai_disclosure_submit'])) {
+            return;
+        }
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die(__('You do not have permission to enable AI features.', 'woo-oneclick'));
+        }
+        check_admin_referer('oneclick_ai_disclosure_ack', 'oneclick_ai_disclosure_nonce');
+
+        $confirmed = isset($_POST['oneclick_ai_disclosure_confirm']) && $_POST['oneclick_ai_disclosure_confirm'] === '1';
+        if (!$confirmed) {
+            set_transient('oneclick_ai_disclosure_error', __('Please confirm the AI privacy disclosure before enabling AI features.', 'woo-oneclick'), 30);
+            wp_safe_redirect(admin_url('admin.php?page=oneclick-ai-setup'));
+            exit;
+        }
+
+        update_option(self::DISCLOSURE_OPTION, 'yes', false);
+        set_transient('oneclick_ai_disclosure_enabled', __('AI features are enabled for this site.', 'woo-oneclick'), 30);
+        wp_safe_redirect(admin_url('admin.php?page=oneclick-ai-setup'));
+        exit;
     }
 
     /**
@@ -63,6 +96,7 @@ class OneClick_AI_Setup {
         wp_localize_script('oneclick-ai-setup', 'oneclickAI', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce'   => wp_create_nonce('oneclick_ai_nonce'),
+            'disclosureAcknowledged' => self::is_disclosure_acknowledged(),
             'i18n'    => [
                 'generating'    => __('Generating suggestions...', 'woo-oneclick'),
                 'applying'      => __('Applying suggestions...', 'woo-oneclick'),
@@ -70,6 +104,7 @@ class OneClick_AI_Setup {
                 'noSuggestions' => __('No suggestions were generated. Try adding more products to your store.', 'woo-oneclick'),
                 'applied'       => __('Suggestions applied successfully! Check Triggers, Actions, and Scenarios pages.', 'woo-oneclick'),
                 'confirmApply'  => __('Apply selected suggestions? They will be created as inactive.', 'woo-oneclick'),
+                'disclosureRequired' => self::disclosure_required_message(),
             ],
         ]);
     }
@@ -80,9 +115,18 @@ class OneClick_AI_Setup {
     public function render_page() {
         $tier = get_option('oneclick_license_tier', 'free');
         $is_pro = ($tier === 'pro');
+        $disclosure_acknowledged = self::is_disclosure_acknowledged();
+        $disclosure_metadata = $this->get_disclosure_metadata();
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('AI Setup', 'woo-oneclick'); ?></h1>
+
+            <?php if ($message = get_transient('oneclick_ai_disclosure_enabled')): delete_transient('oneclick_ai_disclosure_enabled'); ?>
+                <div class="notice notice-success"><p><?php echo esc_html($message); ?></p></div>
+            <?php endif; ?>
+            <?php if ($message = get_transient('oneclick_ai_disclosure_error')): delete_transient('oneclick_ai_disclosure_error'); ?>
+                <div class="notice notice-error"><p><?php echo esc_html($message); ?></p></div>
+            <?php endif; ?>
 
             <?php if (!$is_pro): ?>
                 <div class="notice notice-warning">
@@ -95,15 +139,14 @@ class OneClick_AI_Setup {
                 </div>
             <?php endif; ?>
 
-            <div class="oneclick-ai-container" <?php echo !$is_pro ? 'style="opacity: 0.5; pointer-events: none;"' : ''; ?>>
+            <div class="oneclick-ai-container">
+                <?php $this->render_disclosure_box($disclosure_metadata, $disclosure_acknowledged); ?>
+
                 <!-- Generate Section -->
-                <div class="oneclick-ai-generate-section">
+                <div class="oneclick-ai-generate-section" <?php echo (!$is_pro || !$disclosure_acknowledged) ? 'style="opacity: 0.5; pointer-events: none;"' : ''; ?>>
                     <h2><?php esc_html_e('Generate Campaign Suggestions', 'woo-oneclick'); ?></h2>
                     <p class="description">
                         <?php esc_html_e('AI will analyze your products and categories to suggest optimal triggers, actions, and scenarios for your email campaigns.', 'woo-oneclick'); ?>
-                    </p>
-                    <p class="description">
-                        <?php esc_html_e('Privacy note: product names, categories, store locale, currency, and shop name are sent to the OneClick backend for AI generation. Customer emails, payment data, license keys, and Stripe secrets are not sent in this AI setup request.', 'woo-oneclick'); ?>
                     </p>
 
                     <button type="button" id="oneclick-ai-generate-btn" class="button button-primary button-hero">
@@ -184,6 +227,82 @@ class OneClick_AI_Setup {
         <?php
     }
 
+    private function get_disclosure_metadata() {
+        $fallback = [
+            'provider' => __('configured AI provider', 'woo-oneclick'),
+            'model' => '',
+        ];
+
+        if (empty(get_option('oneclick_license_key', ''))) {
+            return $fallback;
+        }
+
+        $api = OneClick_API_Client::instance();
+        $result = $api->get('/api/ai/disclosure');
+        if (is_wp_error($result)) {
+            return $fallback;
+        }
+
+        return array_merge($fallback, is_array($result) ? $result : []);
+    }
+
+    private function render_disclosure_box($metadata, $acknowledged) {
+        $provider = !empty($metadata['provider']) ? $metadata['provider'] : __('configured AI provider', 'woo-oneclick');
+        $model = !empty($metadata['model']) ? $metadata['model'] : '';
+        ?>
+        <div class="oneclick-ai-disclosure <?php echo $acknowledged ? 'is-acknowledged' : 'needs-acknowledgement'; ?>">
+            <h2><?php esc_html_e('AI Privacy Disclosure', 'woo-oneclick'); ?></h2>
+            <p>
+                <?php
+                printf(
+                    esc_html__('AI features send selected store data through the OneClick backend to the configured AI provider (%1$s%2$s).', 'woo-oneclick'),
+                    esc_html($provider),
+                    $model ? esc_html(' / ' . $model) : ''
+                );
+                ?>
+            </p>
+            <div class="oneclick-ai-disclosure-grid">
+                <div>
+                    <h3><?php esc_html_e('Data that may be sent', 'woo-oneclick'); ?></h3>
+                    <ul>
+                        <li><?php esc_html_e('Product names, prices, categories and short descriptions', 'woo-oneclick'); ?></li>
+                        <li><?php esc_html_e('Shop name, locale and currency', 'woo-oneclick'); ?></li>
+                        <li><?php esc_html_e('Admin instruction text entered for AI email generation', 'woo-oneclick'); ?></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3><?php esc_html_e('Data not sent in AI requests', 'woo-oneclick'); ?></h3>
+                    <ul>
+                        <li><?php esc_html_e('Customer emails or customer payment data', 'woo-oneclick'); ?></li>
+                        <li><?php esc_html_e('License keys, Stripe secrets or backend API secrets', 'woo-oneclick'); ?></li>
+                        <li><?php esc_html_e('Session access tokens or raw purchase payloads', 'woo-oneclick'); ?></li>
+                    </ul>
+                </div>
+            </div>
+            <p class="description">
+                <?php esc_html_e('OneClick logs AI usage metadata such as provider, model, product count, token count and success/failure. Full prompts, catalog payloads, admin instructions and AI response bodies should not be logged.', 'woo-oneclick'); ?>
+            </p>
+
+            <?php if ($acknowledged): ?>
+                <p class="oneclick-ai-disclosure-status"><?php esc_html_e('AI disclosure acknowledged. AI features are enabled for this site.', 'woo-oneclick'); ?></p>
+            <?php else: ?>
+                <form method="post" action="">
+                    <?php wp_nonce_field('oneclick_ai_disclosure_ack', 'oneclick_ai_disclosure_nonce'); ?>
+                    <label>
+                        <input type="checkbox" name="oneclick_ai_disclosure_confirm" value="1" required>
+                        <?php esc_html_e('I understand and want to enable AI features for this site.', 'woo-oneclick'); ?>
+                    </label>
+                    <p>
+                        <button type="submit" name="oneclick_ai_disclosure_submit" value="1" class="button button-primary">
+                            <?php esc_html_e('I understand and enable AI features', 'woo-oneclick'); ?>
+                        </button>
+                    </p>
+                </form>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
     /**
      * AJAX: Generate AI suggestions
      *
@@ -200,6 +319,9 @@ class OneClick_AI_Setup {
         $tier = get_option('oneclick_license_tier', 'free');
         if ($tier !== 'pro') {
             wp_send_json_error(['message' => __('AI Setup requires PRO license.', 'woo-oneclick')]);
+        }
+        if (!self::is_disclosure_acknowledged()) {
+            wp_send_json_error(['message' => self::disclosure_required_message()], 403);
         }
 
         // Fetch products from WooCommerce
@@ -248,6 +370,9 @@ class OneClick_AI_Setup {
 
         if (empty($suggestions)) {
             wp_send_json_error(['message' => __('No suggestions to apply.', 'woo-oneclick')]);
+        }
+        if (!self::is_disclosure_acknowledged()) {
+            wp_send_json_error(['message' => self::disclosure_required_message()], 403);
         }
 
         // Backend expects actions/reactions/rules as top-level fields, not nested under "suggestions"

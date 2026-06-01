@@ -297,15 +297,27 @@ class OneClick_Reactions_Admin {
                 <tr>
                     <th><?php _e('AI Generate', 'woo-oneclick'); ?></th>
                     <td>
+                        <?php $ai_disclosure_acknowledged = class_exists('OneClick_AI_Setup') ? OneClick_AI_Setup::is_disclosure_acknowledged() : false; ?>
                         <textarea id="oneclick-ai-instruction" rows="2" class="large-text" placeholder="<?php esc_attr_e('Optional: instructions for AI (e.g. "write in Slovak", "make it funny", "focus on pet care")...', 'woo-oneclick'); ?>"></textarea>
                         <p style="margin-top:8px;">
-                            <button type="button" id="oneclick-ai-generate-btn" class="button button-secondary">
+                            <button type="button" id="oneclick-ai-generate-btn" class="button button-secondary" <?php disabled(!$ai_disclosure_acknowledged); ?>>
                                 <span class="dashicons dashicons-admin-generic" style="vertical-align:middle;margin-top:-2px;"></span>
                                 <?php _e('AI Generate Email', 'woo-oneclick'); ?>
                             </button>
                             <span id="oneclick-ai-spinner" class="spinner" style="float:none;margin-top:0;"></span>
                         </p>
-                        <p class="description"><?php _e('Generates email subject and body based on the action context (products, categories, discount). Fill those fields first.', 'woo-oneclick'); ?></p>
+                        <?php if (!$ai_disclosure_acknowledged): ?>
+                            <p class="description">
+                                <?php
+                                printf(
+                                    wp_kses_post(__('AI email generation is disabled until the AI privacy disclosure is acknowledged in <a href="%s">AI Setup</a>.', 'woo-oneclick')),
+                                    esc_url(admin_url('admin.php?page=oneclick-ai-setup'))
+                                );
+                                ?>
+                            </p>
+                        <?php else: ?>
+                            <p class="description"><?php _e('Generates email subject and body based on the action context (products, categories, discount). Fill those fields first.', 'woo-oneclick'); ?></p>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <tr>
@@ -363,11 +375,13 @@ class OneClick_Reactions_Admin {
         wp_localize_script('oneclick-ai-email-generate', 'oneclickAiEmail', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce'   => wp_create_nonce('oneclick_ai_generate_email'),
+            'disclosureAcknowledged' => class_exists('OneClick_AI_Setup') ? OneClick_AI_Setup::is_disclosure_acknowledged() : false,
             'i18n'    => [
                 'generating' => __('Generating...', 'woo-oneclick'),
                 'generate'   => __('AI Generate Email', 'woo-oneclick'),
                 'error'      => __('AI generation failed. Please try again.', 'woo-oneclick'),
                 'noProducts' => __('Please select at least one offer product or category first.', 'woo-oneclick'),
+                'disclosureRequired' => class_exists('OneClick_AI_Setup') ? OneClick_AI_Setup::disclosure_required_message() : __('AI features require acknowledgement of the AI privacy disclosure before use.', 'woo-oneclick'),
             ],
         ]);
     }
@@ -377,6 +391,12 @@ class OneClick_Reactions_Admin {
 
         if (!current_user_can('manage_woocommerce')) {
             wp_send_json_error(['message' => 'Unauthorized'], 403);
+        }
+        if (!class_exists('OneClick_AI_Setup') || !OneClick_AI_Setup::is_disclosure_acknowledged()) {
+            $message = class_exists('OneClick_AI_Setup')
+                ? OneClick_AI_Setup::disclosure_required_message()
+                : __('AI features require acknowledgement of the AI privacy disclosure before use.', 'woo-oneclick');
+            wp_send_json_error(['message' => $message], 403);
         }
 
         $reaction_name    = sanitize_text_field($_POST['reaction_name'] ?? '');

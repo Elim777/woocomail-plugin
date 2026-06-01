@@ -13,6 +13,11 @@
 
     // Generate button
     $('#oneclick-ai-generate-btn').on('click', function () {
+        if (!oneclickAI.disclosureAcknowledged) {
+            showStatus(oneclickAI.i18n.disclosureRequired, 'error');
+            return;
+        }
+
         var $btn = $(this);
         $btn.prop('disabled', true);
         $('#oneclick-ai-loading').show();
@@ -49,6 +54,11 @@
 
     // Apply button
     $('#oneclick-ai-apply-btn').on('click', function () {
+        if (!oneclickAI.disclosureAcknowledged) {
+            showStatus(oneclickAI.i18n.disclosureRequired, 'error');
+            return;
+        }
+
         if (!confirm(oneclickAI.i18n.confirmApply)) {
             return;
         }

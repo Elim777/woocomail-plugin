@@ -457,7 +457,7 @@ Important backend endpoints:
 | Licensing | `POST /api/license/check`, `POST /api/license/activate-from-session` |
 | Carts | `POST /api/carts/activity`, `POST /api/carts/detect-abandoned` |
 | Periodic | `POST /api/periodic/detect` |
-| AI | `POST /api/ai/setup`, `/api/ai/apply`, `/api/ai/generate-email` |
+| AI | `GET /api/ai/disclosure`, `POST /api/ai/setup`, `/api/ai/apply`, `/api/ai/generate-email` |
 
 Public browser-only backend endpoints:
 
@@ -655,7 +655,9 @@ For `finalization_mode=checkout`:
 - Inputs are sanitized.
 - Outputs are escaped.
 - License keys are masked in admin display.
-- AI Setup includes privacy disclosure for provider-bound catalog/instruction data.
+- AI Setup includes one-time admin acknowledgement for provider-bound catalog/instruction data.
+- AI Generate Email uses the same acknowledgement state and is disabled until the disclosure is acknowledged.
+- AI disclosure states that product names, prices, categories, short descriptions, shop name, locale, currency and admin instruction text may be sent to the OneClick backend and configured AI provider. Customer emails, payment data, license keys, Stripe secrets, session access tokens and raw purchase payloads are not sent in AI requests.
 
 ### Removed Old Runtime Model
 

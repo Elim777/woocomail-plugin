@@ -290,7 +290,9 @@ Important options:
   - `By Source`: public link vs email campaign source split.
   - `Public Endpoint Guard`: public endpoint calls such as `/public-click`, not purchases.
 - License keys shown in admin UI are masked unless explicitly revealed/copied.
-- AI Setup includes an admin privacy disclosure because catalog/instruction data may be sent to the configured AI provider.
+- AI Setup requires a one-time admin acknowledgement before AI features can be used.
+- AI Generate Email uses the same acknowledgement state and is disabled until disclosure is acknowledged.
+- AI disclosure explains that product names, prices, categories, short descriptions, shop name, locale, currency and admin instruction text may be sent to the OneClick backend and configured AI provider. Customer emails, payment data, license keys, Stripe secrets, session access tokens and raw purchase payloads are not sent in AI requests.
 - Admin forms use WordPress nonces and `manage_woocommerce` capability.
 - Ocliby still needs a separate server-side internal admin dashboard outside the plugin. That future dashboard should show all tenants/licenses, tenant keys, activation state, per-tenant funnel counts, failed/stale sessions and public endpoint abuse signals without exposing tokens, license keys, Stripe secrets or raw payloads.
 - Order creation uses WooCommerce APIs and is HPOS compatible.
