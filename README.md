@@ -1,6 +1,6 @@
 # WooCommerce One-Click Purchase Plugin
 
-WordPress/WooCommerce plugin for post-purchase email campaigns, public one-click marketing links, timed purchase windows, Stripe MIT execution, checkout fallback, abandoned cart recovery, periodic reminders, branding, and AI-assisted campaign setup.
+WordPress/WooCommerce plugin for post-purchase email campaigns, public one-click marketing links, timed purchase windows, Stripe MIT execution, checkout fallback, checkout completion reporting, abandoned cart recovery, periodic reminders, branding, AI-assisted campaign setup, and read-only OneClick observability.
 
 The plugin is the WordPress-side execution layer. The FastAPI backend is the source of truth for rules, public links, offers, opaque claims, purchase sessions, timing, branding data, email delivery, and licensing.
 
@@ -26,6 +26,8 @@ The plugin owns:
 - public shop URL passthrough routes,
 - purchase window rendering,
 - checkout fallback,
+- checkout redirect/completion reporting,
+- read-only operational dashboard,
 - Stripe MIT charge execution,
 - WooCommerce order creation,
 - Action Scheduler / WP-Cron session finalization worker.
@@ -38,6 +40,7 @@ The backend owns:
 - short ID claim,
 - opaque code exchange,
 - purchase session state and timer,
+- observability metrics and safe dashboard data,
 - license and tenant validation.
 
 Security invariant:
@@ -68,17 +71,19 @@ Flow:
 6. Backend creates `PurchaseOffer` and `PurchaseOfferItem.short_id`.
 7. Email link points to backend `/click?id={short_id}`.
 8. Backend turns short ID into an opaque `claim_code`.
-9. Browser returns to plugin REST purchase route:
+9. Browser returns to plugin non-REST email identity gate:
 
    ```text
-   /wp-json/oneclick/v1/purchase?code={claim_code}
+   /oneclick/email-claim/{claim_code}
    ```
 
-10. Plugin calls backend `POST /api/purchase/exchange-code` with license headers.
-11. Backend returns `flow=purchase_session`.
-12. Plugin sets HttpOnly session access cookie and redirects to purchase window.
+10. WordPress reads normal login cookies and the plugin prepares cookie-derived identity context.
+11. Plugin calls backend `POST /api/purchase/exchange-code` with license headers.
+12. Backend returns `flow=purchase_session`; MIT/non-card is allowed only when the current WordPress user matches the original email offer user.
+13. Anonymous or mismatched email clicks fall back to checkout-only behavior.
+14. Plugin sets HttpOnly session access cookie and redirects to purchase window or checkout fallback.
 
-Compatibility value `immediate_purchase` still exists for legacy/test fallback. It uses the same opaque exchange pattern but may return immediate payload instead of a timed session.
+Compatibility value `immediate_purchase` still exists for explicit legacy/test fallback, but is hidden/default-disabled unless a dev/test flag enables it.
 
 ### 2. Public One-Click Marketing Links
 
@@ -114,10 +119,11 @@ Click flow:
    ```
 
 5. Plugin non-REST claim landing reads normal WordPress login cookies.
-6. Logged-in users must confirm via WordPress nonce before user/payment context is used.
-7. Anonymous users continue as checkout-only.
-8. Plugin exchanges claim code via licensed `POST /api/purchase/exchange-code`.
-9. Backend opens or joins a `PurchaseSession`.
+6. Logged-in non-admin users are handled silently from WordPress cookie context without an extra confirmation screen.
+7. Users with WooCommerce management/admin capability are not used as shopper identity.
+8. Anonymous users follow public link policy: direct Woo checkout or primary product page.
+9. Plugin exchanges claim code via licensed `POST /api/purchase/exchange-code` when a session/checkout transport is needed.
+10. Backend opens or joins a `PurchaseSession`.
 
 Session rejoin:
 
@@ -149,7 +155,9 @@ Checkout mode behavior:
 - before timer expires, user can click **Continue to Checkout**,
 - when checkout-mode timer reaches zero, UI auto-calls the checkout endpoint,
 - plugin adds locked-price session items to WooCommerce cart,
+- plugin reports checkout redirect handoff to the backend for observability,
 - browser redirects to Woo checkout,
+- Woo checkout order hook reports checkout completion to the backend when an order is created,
 - no payment or order is created before checkout.
 
 ### 4. Auto Finalization
@@ -170,6 +178,7 @@ Worker flow:
 
 ```text
 One-Click Purchase
+├── Dashboard         Read-only sessions, checkout funnel, email and guardrail metrics
 ├── Settings          Backend URL, license, Stripe, completion mode
 ├── Triggers          Action definitions
 ├── Actions           Offer/reaction definitions
@@ -202,6 +211,7 @@ woo-oneclick-purchase/
 │   ├── class-rules-admin.php
 │   ├── class-product-picker.php
 │   ├── class-email-branding.php
+│   ├── class-observability-dashboard.php
 │   ├── class-cart-tracker.php
 │   ├── class-periodic-cron.php
 │   ├── class-ai-setup.php
@@ -239,7 +249,7 @@ Important options:
 | Option | Default | Purpose |
 |--------|---------|---------|
 | `oneclick_backend_url` | `https://woocomail-api.onrender.com` | Backend API base URL |
-| `oneclick_purchase_completion_mode` | `purchase_session` | `purchase_session` or `immediate_purchase` |
+| `oneclick_purchase_completion_mode` | `purchase_session` | `purchase_session`; `immediate_purchase` is dev/test-only when explicitly enabled |
 | `oneclick_purchase_link_mode` | `all_with_cart_fallback` | Compatibility payment behavior |
 | `oneclick_license_key` | empty | Backend license key |
 
@@ -247,13 +257,22 @@ Important options:
 
 - Public shop URL contains only backend-generated opaque `short_id`.
 - `/oneclick/{short_id}` is passthrough-only.
-- Public logged-in user context requires WordPress nonce confirmation.
+- Public logged-in shopper context is read silently from current WordPress cookies on non-REST claim landing.
+- Admin users are not used as public shopper identity.
+- `oneclick_public_visitor` is `HttpOnly`, `SameSite=Lax`, and `Secure=true` on production HTTPS while preserving Local compatibility.
 - Browser never sees backend license key.
 - Browser never sees raw JWT purchase payload.
 - Plugin sends license key only in server-side backend requests.
 - Session access token is stored in HttpOnly cookie.
 - WooCommerce orders are created only after backend session state allows execution.
 - Anonymous public sessions are checkout-only and never auto-charged.
+- Anonymous public links can route directly to Woo checkout or primary product page according to admin policy.
+- Checkout redirects are reported to the backend without changing session status.
+- Checkout completion is reported from the Woo order hook for checkout sessions; the backend records completion but does not create the order or charge the payment method.
+- OneClick Dashboard data comes from licensed server-side backend requests and is read-only.
+- Dashboard/session rows are masked and do not expose access tokens, license keys, visitor keys, Stripe secrets or raw payloads.
+- License keys shown in admin UI are masked unless explicitly revealed/copied.
+- AI Setup includes an admin privacy disclosure because catalog/instruction data may be sent to the configured AI provider.
 - Admin forms use WordPress nonces and `manage_woocommerce` capability.
 - Order creation uses WooCommerce APIs and is HPOS compatible.
 

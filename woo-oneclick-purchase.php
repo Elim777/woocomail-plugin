@@ -208,6 +208,7 @@ function oneclick_load_classes() {
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-rules-admin.php';
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-product-picker.php';
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-public-links.php';
+    require_once ONECLICK_PLUGIN_DIR . 'includes/class-observability-dashboard.php';
 
     // Email branding admin
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-email-branding.php';
@@ -256,6 +257,7 @@ function oneclick_init() {
     new OneClick_Rules_Admin();
     new OneClick_Product_Picker();
     new OneClick_Public_Links();
+    new OneClick_Observability_Dashboard();
     new OneClick_Email_Branding();
     new OneClick_Cart_Tracker();
     new OneClick_Periodic_Cron();

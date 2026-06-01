@@ -61,6 +61,7 @@ class OneClick_Cart_Tracker {
      */
     public function on_order_processed($order_id, $posted_data, $order) {
         $this->track_activity('order_processed');
+        $this->report_oneclick_checkout_completion($order_id, $order);
     }
 
     /**
@@ -124,6 +125,68 @@ class OneClick_Cart_Tracker {
                 'OneClick Cart: Failed to track %s: %s',
                 $event_type,
                 $result->get_error_message()
+            ));
+        }
+    }
+
+    /**
+     * Report checkout fallback completion without changing Woo order behavior.
+     */
+    private function report_oneclick_checkout_completion($order_id, $order) {
+        if (!function_exists('WC') || !WC()->cart) {
+            return;
+        }
+
+        $session_ids = [];
+        foreach (WC()->cart->get_cart() as $item) {
+            $session_id = sanitize_text_field($item['oneclick_session_id'] ?? '');
+            if ($session_id !== '') {
+                $session_ids[$session_id] = true;
+            }
+        }
+
+        if (empty($session_ids)) {
+            return;
+        }
+
+        if (!$order || !is_a($order, 'WC_Order')) {
+            $order = wc_get_order($order_id);
+        }
+        if (!$order) {
+            return;
+        }
+
+        $session_ids = array_keys($session_ids);
+        $primary_session_id = $session_ids[0];
+        $order->update_meta_data('_oneclick_checkout_session', 'yes');
+        $order->update_meta_data('_oneclick_session_id', $primary_session_id);
+        if (count($session_ids) > 1) {
+            $order->update_meta_data('_oneclick_session_ids', wp_json_encode($session_ids));
+        }
+        $order->save();
+
+        $api = OneClick_API_Client::instance();
+        foreach ($session_ids as $session_id) {
+            $result = $api->post('/api/purchase-sessions/report-checkout-completion', [
+                'site_url' => site_url(),
+                'session_id' => $session_id,
+                'order_id' => (int) $order_id,
+            ]);
+
+            if (is_wp_error($result)) {
+                error_log(sprintf(
+                    'OneClick Checkout Completion: report failed | session_id=%s | order_id=%d | error=%s',
+                    substr($session_id, 0, 8) . '...',
+                    (int) $order_id,
+                    $result->get_error_message()
+                ));
+                continue;
+            }
+
+            error_log(sprintf(
+                'OneClick Checkout Completion: report OK | session_id=%s | order_id=%d',
+                substr($session_id, 0, 8) . '...',
+                (int) $order_id
             ));
         }
     }

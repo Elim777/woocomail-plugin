@@ -3,7 +3,7 @@
 
 **Version:** 2.0.0
 **Author:** Seventh Day Labs
-**Last Updated:** 2026-05-28
+**Last Updated:** 2026-06-01
 
 ---
 
@@ -137,6 +137,7 @@ Loaded classes include:
 - `OneClick_Product_Picker`
 - `OneClick_Public_Links`
 - `OneClick_Email_Branding`
+- `OneClick_Observability_Dashboard`
 - `OneClick_Cart_Tracker`
 - `OneClick_Periodic_Cron`
 - `OneClick_Campaign_Trigger`
@@ -209,14 +210,16 @@ Public route responsibilities:
 - register rewrite route `/oneclick/claim/{claim_code}`,
 - set/refresh anonymous visitor cookie `oneclick_public_visitor`,
 - perform passthrough redirect to backend `/public-click`,
-- render logged-in confirmation screen with nonce,
+- handle silent logged-in non-admin claim exchange from WordPress cookie context,
+- ignore WooCommerce admin users as shopper identity in public flow,
+- route anonymous public visitors to checkout or primary product page according to link policy,
 - perform public claim exchange through `OneClick_Purchase_Handler`.
 
 ### `OneClick_Purchase_Handler`
 
 Owns opaque code exchange and immediate/session branch handling.
 
-Public REST route:
+Legacy compatibility REST route:
 
 ```text
 GET /wp-json/oneclick/v1/purchase?code={claim_code}
@@ -224,14 +227,14 @@ GET /wp-json/oneclick/v1/purchase?code={claim_code}
 
 Responsibilities:
 
-- receive opaque `code`,
+- receive opaque `code` for legacy/compatibility callbacks,
 - prepare exchange context,
 - call `/api/purchase/exchange-code`,
 - branch on backend response:
   - `flow=purchase_session` -> set session cookie and redirect to session page,
-  - `flow=immediate_purchase` -> compatibility execution path.
+  - `flow=immediate_purchase` -> explicit dev/test compatibility execution path when enabled.
 
-It exposes shared helpers used by public claim landing:
+It exposes shared helpers used by public and email claim landing:
 
 - `get_exchange_context()`,
 - `exchange_code_with_backend()`,
@@ -258,8 +261,21 @@ Responsibilities:
 - proxy browser session actions to backend with license key server-side,
 - render branded purchase window,
 - auto-redirect checkout-mode sessions when timer reaches zero,
+- report checkout redirect handoff to backend,
 - process due sessions through Action Scheduler / WP-Cron,
 - execute finalization and report result.
+
+### `OneClick_Observability_Dashboard`
+
+Owns the read-only OneClick Dashboard admin page.
+
+Responsibilities:
+
+- register the `Dashboard` submenu,
+- call licensed backend `GET /api/observability/overview`,
+- call licensed backend `GET /api/observability/sessions`,
+- render session health, checkout funnel, email engagement, public endpoint guard and recent sessions,
+- display only masked/whitelisted backend data.
 
 ### `OneClick_Order_Creator`
 
@@ -311,6 +327,9 @@ Purchase window loads branding server-side through backend API.
 - `OneClick_Product_Button`
 
 JWT classes remain for compatibility/testing; they are not the primary browser purchase security model.
+The immediate/JWT path is disabled by default and should be enabled only for explicit dev/test compatibility.
+
+`OneClick_Cart_Tracker` also reports checkout completion for OneClick checkout sessions from the Woo order hook. It reads `oneclick_session_id` cart item metadata, stores safe order meta, and calls `POST /api/purchase-sessions/report-checkout-completion`.
 
 ---
 
@@ -326,10 +345,10 @@ WooCommerce order
   -> OneClick_Campaign_Trigger::send_campaign_email()
   -> POST /api/send-campaign-email completion_mode=purchase_session
   -> backend sends /click?id={short_id}
-  -> browser returns to /wp-json/oneclick/v1/purchase?code={claim_code}
-  -> OneClick_Purchase_Handler::handle_purchase()
+  -> backend 302 to /oneclick/email-claim/{claim_code}
+  -> non-REST email claim landing reads WordPress cookies
   -> POST /api/purchase/exchange-code
-  -> backend returns flow=purchase_session
+  -> backend enforces expected user match for MIT/non-card and returns flow=purchase_session
   -> session cookie + redirect to /wp-json/oneclick/v1/session
   -> OneClick_Purchase_Session renders window
 ```
@@ -337,7 +356,8 @@ WooCommerce order
 Email flow keeps the browser bridge:
 
 - browser hits backend `/click`,
-- backend redirects browser to WordPress with opaque code,
+- backend redirects browser to WordPress non-REST email claim route with opaque code,
+- WordPress provides cookie identity context,
 - plugin redeems code outbound.
 
 ### 5.2 Public One-Click Link Flow
@@ -356,7 +376,7 @@ Browser click
   -> backend creates claim_code
   -> 302 /oneclick/claim/{claim_code}
   -> plugin non-REST claim landing
-  -> logged-in nonce confirmation OR anonymous checkout-only
+  -> logged-in non-admin silent cookie context OR admin/anonymous routing
   -> POST /api/purchase/exchange-code
   -> session cookie + purchase window
 ```
@@ -385,6 +405,8 @@ For `finalization_mode=checkout`:
 - timer expiration auto-starts checkout redirect,
 - plugin validates session state,
 - plugin adds session items to WooCommerce cart with locked prices,
+- plugin reports checkout redirect handoff to backend,
+- Woo order hook reports checkout completion to backend when checkout creates an order,
 - browser redirects to Woo checkout,
 - no automatic order/payment happens before checkout.
 
@@ -424,7 +446,9 @@ Important backend endpoints:
 | Campaign email | `POST /api/send-campaign-email` |
 | Opaque code exchange | `POST /api/purchase/exchange-code` |
 | Public link CRUD | `GET/POST/PUT/DELETE /api/public-links` |
-| Session status/actions | `POST /api/purchase-sessions/*` |
+| Session status/actions | `POST /api/purchase-sessions/*`, including checkout redirect reporting |
+| Observability dashboard | `GET /api/observability/overview`, `GET /api/observability/sessions` |
+| Checkout completion report | `POST /api/purchase-sessions/report-checkout-completion` |
 | Branding | `GET/POST /api/branding`, preview endpoints |
 | Domains | `POST /api/domains/provision`, `POST /api/domains/{id}/verify` |
 | Licensing | `POST /api/license/check`, `POST /api/license/activate-from-session` |
@@ -461,7 +485,7 @@ The plugin never adds license headers to browser redirects.
 | `woocommerce_add_to_cart` | Track cart |
 | `woocommerce_cart_item_removed` | Track cart |
 | `woocommerce_after_cart_item_quantity_update` | Track cart |
-| `woocommerce_checkout_order_processed` | Mark cart checkout |
+| `woocommerce_checkout_order_processed` | Mark cart checkout and report OneClick checkout completion |
 | `woocommerce_payment_complete` | Stripe reconciliation |
 | `oneclick_send_campaign_email` | Send scheduled campaign email |
 | `oneclick_daily_license_check` | License refresh |
@@ -474,6 +498,7 @@ The plugin never adds license headers to browser redirects.
 ```text
 /oneclick/{short_id}
 /oneclick/claim/{claim_code}
+/oneclick/email-claim/{claim_code}
 ```
 
 ### REST Routes
@@ -496,6 +521,7 @@ The plugin never adds license headers to browser redirects.
 
 ```text
 One-Click Purchase
+├── Dashboard
 ├── Settings
 ├── Triggers
 ├── Actions
@@ -511,6 +537,16 @@ One-Click Purchase
 
 Stores backend URL, license, Stripe keys, purchase link mode, and completion mode.
 
+### Dashboard
+
+Read-only operational view backed by licensed server-side backend calls:
+
+- session health by status/source/finalization mode,
+- checkout funnel: redirected, completed, abandoned, product exits,
+- email engagement: tracked sends, delivered/open/click/bounce/complaint/unsubscribe,
+- public endpoint guard hits,
+- recent sessions with safe masked fields.
+
 ### Triggers / Actions / Scenarios
 
 Thin admin UI for backend-managed actions, reactions, and rules.
@@ -522,6 +558,7 @@ Public marketing link CRUD:
 - primary product,
 - additional products,
 - discount,
+- anonymous destination: direct checkout or primary product page,
 - status,
 - generated `/oneclick/{short_id}` URL.
 
@@ -567,7 +604,9 @@ For `finalization_mode=checkout`:
 
 - backend worker does not claim session,
 - browser checkout button/timer redirects to Woo checkout,
-- checkout remains user-confirmed WooCommerce flow.
+- checkout remains user-confirmed WooCommerce flow,
+- checkout redirect handoff is reported without changing session status,
+- checkout completion is reported after WooCommerce creates the order.
 
 ---
 
@@ -577,17 +616,19 @@ For `finalization_mode=checkout`:
 
 - `/oneclick/{short_id}` contains no payload.
 - Route is passthrough-only.
-- `oneclick_public_visitor` contains only random anonymous identity.
+- `oneclick_public_visitor` contains only random anonymous identity and is `HttpOnly`, `SameSite=Lax`, `Secure=true` on production HTTPS.
 - Backend `/public-click` creates opaque claim code.
-- Logged-in user context requires nonce confirmation.
-- Anonymous user remains checkout-only.
+- Logged-in non-admin user context is read silently from current WordPress cookies.
+- WooCommerce admin users are not used as shopper identity.
+- Anonymous user routes to direct checkout or primary product page and is never auto-charged.
 
 ### Email Link Security
 
 - Email link goes to backend `/click`.
 - Backend creates opaque claim code.
-- Browser returns to plugin with only `code`.
-- Plugin exchanges code through licensed backend request.
+- Browser returns to plugin non-REST `/oneclick/email-claim/{claim_code}`.
+- Plugin exchanges code through licensed backend request with cookie-derived identity context.
+- Backend permits MIT/non-card only if current WordPress user matches the original email offer user; anonymous/mismatch is checkout-only.
 
 ### Session Security
 
@@ -595,6 +636,7 @@ For `finalization_mode=checkout`:
 - Browser actions go to WordPress REST only.
 - WordPress proxies to backend with license key server-side.
 - Backend validates session ID, access token, and tenant.
+- Dashboard observability responses are read-only and masked; they do not expose access tokens, license keys, visitor keys, idempotency keys, Stripe secrets or raw payloads.
 
 ### Admin Security
 
@@ -602,6 +644,8 @@ For `finalization_mode=checkout`:
 - Forms use WordPress nonces.
 - Inputs are sanitized.
 - Outputs are escaped.
+- License keys are masked in admin display.
+- AI Setup includes privacy disclosure for provider-bound catalog/instruction data.
 
 ### Removed Old Runtime Model
 
@@ -650,6 +694,7 @@ The plugin uses WooCommerce APIs for:
 - copying billing/shipping,
 - adding cart items,
 - creating orders.
+- reporting OneClick checkout completion after Woo checkout order creation.
 
 It does not use direct SQL for WooCommerce orders and is HPOS compatible.
 
