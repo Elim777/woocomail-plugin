@@ -47,7 +47,7 @@ class OneClick_Observability_Dashboard {
 
         echo '<div class="wrap oneclick-observability">';
         echo '<h1>' . esc_html__('OneClick Dashboard', 'woo-oneclick') . '</h1>';
-        echo '<p class="description">' . esc_html__('Read-only operational view of purchase sessions, checkout handoff, email engagement and public endpoint guardrails.', 'woo-oneclick') . '</p>';
+        echo '<p class="description">' . esc_html__('Read-only client view of emails sent, links clicked, sessions opened, checkout visits and orders created.', 'woo-oneclick') . '</p>';
 
         $this->render_window_tabs($hours);
 
@@ -62,11 +62,12 @@ class OneClick_Observability_Dashboard {
         }
 
         $this->render_styles();
-        $this->render_cards($overview);
-        $this->render_funnel($overview);
-        $this->render_email($overview);
-        $this->render_health($overview);
+        $this->render_overview($overview);
+        $this->render_email_campaigns($overview);
+        $this->render_public_links($overview);
+        $this->render_purchase_outcomes($overview);
         $this->render_recent_sessions($sessions['sessions'] ?? []);
+        $this->render_technical_health($overview);
 
         echo '</div>';
     }
@@ -87,60 +88,72 @@ class OneClick_Observability_Dashboard {
         echo '</div>';
     }
 
-    private function render_cards($overview) {
+    private function render_overview($overview) {
+        $overview_data = $this->get($overview, ['client_funnel', 'overview'], []);
+        echo '<h2>' . esc_html__('Overview', 'woo-oneclick') . '</h2>';
+        echo '<div class="oneclick-grid oneclick-grid-4">';
+        $this->card(__('Emails Sent', 'woo-oneclick'), $overview_data['emails_sent'] ?? 0, __('Campaign, recovery and reminder emails', 'woo-oneclick'));
+        $this->card(__('Links Clicked', 'woo-oneclick'), $overview_data['links_clicked'] ?? 0, __('Email and public links opened by shoppers', 'woo-oneclick'));
+        $this->card(__('Sessions Opened', 'woo-oneclick'), $overview_data['sessions_opened'] ?? 0, __('Purchase windows or checkout sessions started', 'woo-oneclick'));
+        $this->card(__('Orders Created', 'woo-oneclick'), $overview_data['orders_created'] ?? 0, __('WooCommerce orders attributed to OneClick', 'woo-oneclick'));
+        echo '</div>';
+    }
+
+    private function render_email_campaigns($overview) {
+        $email = $this->get($overview, ['client_funnel', 'email_campaigns'], []);
+        echo '<h2>' . esc_html__('Email Campaigns', 'woo-oneclick') . '</h2>';
+        echo '<div class="oneclick-grid oneclick-grid-4">';
+        $this->card(__('Sent', 'woo-oneclick'), $email['emails_sent'] ?? 0, __('Emails created by OneClick flows', 'woo-oneclick'));
+        $this->card(__('Links Sent', 'woo-oneclick'), $email['email_links_sent'] ?? 0, __('Product links included in campaign emails', 'woo-oneclick'));
+        $this->card(__('Delivered', 'woo-oneclick'), $email['emails_delivered'] ?? 0, __('SendGrid delivered events', 'woo-oneclick'));
+        $this->card(__('Opened', 'woo-oneclick'), $email['emails_opened'] ?? 0, __('Depends on SendGrid open tracking', 'woo-oneclick'));
+        echo '</div>';
+
+        echo '<div class="oneclick-grid oneclick-grid-4">';
+        $this->card(__('Clicked', 'woo-oneclick'), $email['email_clicks'] ?? 0, __('Email purchase links clicked', 'woo-oneclick'));
+        $this->card(__('Sessions', 'woo-oneclick'), $email['email_sessions_opened'] ?? 0, __('Purchase sessions opened from email', 'woo-oneclick'));
+        $this->card(__('Orders', 'woo-oneclick'), $email['email_orders'] ?? 0, __('Orders attributed to email sessions', 'woo-oneclick'));
+        $this->card(__('Tracking Note', 'woo-oneclick'), __('Info', 'woo-oneclick'), __('Opens and clicks depend on SendGrid event webhooks being enabled.', 'woo-oneclick'));
+        echo '</div>';
+    }
+
+    private function render_public_links($overview) {
+        $public = $this->get($overview, ['client_funnel', 'public_links'], []);
+        echo '<h2>' . esc_html__('Public Links', 'woo-oneclick') . '</h2>';
+        echo '<div class="oneclick-grid oneclick-grid-5">';
+        $this->card(__('Link Clicks', 'woo-oneclick'), $public['public_link_clicks'] ?? 0, __('Public one-click links opened', 'woo-oneclick'));
+        $this->card(__('Sessions', 'woo-oneclick'), $public['public_sessions_opened'] ?? 0, __('Purchase sessions opened from public links', 'woo-oneclick'));
+        $this->card(__('Product Page Visits', 'woo-oneclick'), $public['public_product_exits'] ?? 0, __('Anonymous shoppers sent to product page', 'woo-oneclick'));
+        $this->card(__('Checkout Visits', 'woo-oneclick'), $public['public_checkout_redirects'] ?? 0, __('Anonymous shoppers sent to checkout', 'woo-oneclick'));
+        $this->card(__('Orders', 'woo-oneclick'), $public['public_orders'] ?? 0, __('Orders attributed to public links', 'woo-oneclick'));
+        echo '</div>';
+    }
+
+    private function render_purchase_outcomes($overview) {
+        $outcomes = $this->get($overview, ['client_funnel', 'purchase_outcomes'], []);
+        echo '<h2>' . esc_html__('Purchase Outcomes', 'woo-oneclick') . '</h2>';
+        echo '<div class="oneclick-grid oneclick-grid-6">';
+        $this->card(__('Open Now', 'woo-oneclick'), $outcomes['open_now'] ?? 0, __('Sessions still inside their active timer', 'woo-oneclick'));
+        $this->card(__('Went to Checkout', 'woo-oneclick'), $outcomes['went_to_checkout'] ?? 0, __('Checkout handoffs from OneClick', 'woo-oneclick'));
+        $this->card(__('Auto Purchases', 'woo-oneclick'), $outcomes['auto_purchase_attempts'] ?? 0, __('Saved-card or non-card order attempts', 'woo-oneclick'));
+        $this->card(__('Orders Created', 'woo-oneclick'), $outcomes['orders_created'] ?? 0, __('Finalized sessions with Woo order', 'woo-oneclick'));
+        $this->card(__('Cancelled', 'woo-oneclick'), $outcomes['cancelled'] ?? 0, __('Sessions cancelled by shopper', 'woo-oneclick'));
+        $this->card(__('Abandoned', 'woo-oneclick'), $outcomes['abandoned'] ?? 0, sprintf(__('No checkout/order after %d minutes or expired timer', 'woo-oneclick'), (int) ($outcomes['abandoned_after_minutes'] ?? 30)));
+        echo '</div>';
+    }
+
+    private function render_technical_health($overview) {
         $status = $this->get($overview, ['sessions', 'by_status'], []);
         $sessions = $this->get($overview, ['sessions'], []);
-        $checkout = $this->get($overview, ['checkout_funnel'], []);
-        $claims = $this->get($overview, ['claims'], []);
-
-        echo '<div class="oneclick-grid oneclick-grid-4">';
-        $this->card(__('Active Sessions', 'woo-oneclick'), $status['active'] ?? 0, __('Currently open windows', 'woo-oneclick'));
-        $this->card(__('Due / Retry', 'woo-oneclick'), $sessions['due'] ?? 0, __('Ready for worker claim', 'woo-oneclick'));
-        $this->card(__('Checkout Completed', 'woo-oneclick'), $checkout['completed'] ?? 0, __('Checkout sessions with Woo order', 'woo-oneclick'));
-        $this->card(__('Claims Redeemed', 'woo-oneclick'), ($claims['email_redeemed'] ?? 0) + ($claims['public_redeemed'] ?? 0), __('Email + public claims', 'woo-oneclick'));
-        echo '</div>';
-    }
-
-    private function render_funnel($overview) {
-        $checkout = $this->get($overview, ['checkout_funnel'], []);
-        echo '<h2>' . esc_html__('Checkout Funnel', 'woo-oneclick') . '</h2>';
-        echo '<div class="oneclick-grid oneclick-grid-4">';
-        $this->card(__('Redirected', 'woo-oneclick'), $checkout['redirected'] ?? 0, __('Handed to Woo checkout', 'woo-oneclick'));
-        $this->card(__('Completed', 'woo-oneclick'), $checkout['completed'] ?? 0, __('Woo order reported', 'woo-oneclick'));
-        $this->card(__('Abandoned', 'woo-oneclick'), $checkout['abandoned'] ?? 0, sprintf(__('No order after %d minutes', 'woo-oneclick'), (int) ($checkout['abandoned_after_minutes'] ?? 30)));
-        $this->card(__('Product Exits', 'woo-oneclick'), $checkout['public_product_redirects'] ?? 0, __('Public anonymous product redirects', 'woo-oneclick'));
-        echo '</div>';
-    }
-
-    private function render_email($overview) {
-        $email = $this->get($overview, ['email'], []);
-        $events = $email['events'] ?? [];
-        echo '<h2>' . esc_html__('Email Engagement', 'woo-oneclick') . '</h2>';
-        echo '<div class="oneclick-grid oneclick-grid-4">';
-        $this->card(__('Tracked Sends', 'woo-oneclick'), $email['sent_tracked'] ?? 0, __('Campaign/recovery/periodic records', 'woo-oneclick'));
-        $this->card(__('Delivered', 'woo-oneclick'), $events['delivered'] ?? 0, __('SendGrid delivered events', 'woo-oneclick'));
-        $this->card(__('Opened', 'woo-oneclick'), $events['open'] ?? 0, sprintf(__('Open rate %s%%', 'woo-oneclick'), esc_html($this->percent($email['open_rate'] ?? 0))));
-        $this->card(__('Clicked', 'woo-oneclick'), $events['click'] ?? 0, sprintf(__('Click rate %s%%', 'woo-oneclick'), esc_html($this->percent($email['click_rate'] ?? 0))));
-        echo '</div>';
-
-        echo '<div class="oneclick-grid oneclick-grid-3">';
-        $this->card(__('Bounces', 'woo-oneclick'), $events['bounce'] ?? 0, __('Suppression-sensitive', 'woo-oneclick'));
-        $this->card(__('Complaints', 'woo-oneclick'), $events['complaint'] ?? 0, __('Suppression-sensitive', 'woo-oneclick'));
-        $this->card(__('Unsubscribes', 'woo-oneclick'), $events['unsubscribe'] ?? 0, __('Tenant suppression events', 'woo-oneclick'));
-        echo '</div>';
-    }
-
-    private function render_health($overview) {
-        $status = $this->get($overview, ['sessions', 'by_status'], []);
         $finalization = $this->get($overview, ['sessions', 'by_finalization_mode'], []);
         $source = $this->get($overview, ['sessions', 'by_source_type'], []);
         $rate_limits = $this->get($overview, ['rate_limits', 'hits'], []);
 
-        echo '<h2>' . esc_html__('Session Health', 'woo-oneclick') . '</h2>';
+        echo '<h2>' . esc_html__('Technical Health', 'woo-oneclick') . '</h2>';
         echo '<div class="oneclick-grid oneclick-grid-3">';
-        $this->card(__('Finalized', 'woo-oneclick'), $status['finalized'] ?? 0, __('All-time tenant count', 'woo-oneclick'));
+        $this->card(__('Due / Retry', 'woo-oneclick'), $sessions['due'] ?? 0, __('Worker can claim these sessions', 'woo-oneclick'));
+        $this->card(__('Stale Finalizing', 'woo-oneclick'), $sessions['stale_finalizing'] ?? 0, __('Worker retry watch', 'woo-oneclick'));
         $this->card(__('Failed', 'woo-oneclick'), $status['failed'] ?? 0, __('Needs review if non-zero', 'woo-oneclick'));
-        $this->card(__('Stale Finalizing', 'woo-oneclick'), $this->get($overview, ['sessions', 'stale_finalizing'], 0), __('Worker retry watch', 'woo-oneclick'));
         echo '</div>';
 
         echo '<div class="oneclick-panels">';
@@ -153,7 +166,7 @@ class OneClick_Observability_Dashboard {
     private function render_recent_sessions($sessions) {
         echo '<h2>' . esc_html__('Recent Sessions', 'woo-oneclick') . '</h2>';
         echo '<table class="widefat striped oneclick-sessions"><thead><tr>';
-        foreach ([__('Session', 'woo-oneclick'), __('Status', 'woo-oneclick'), __('Source', 'woo-oneclick'), __('Mode', 'woo-oneclick'), __('User', 'woo-oneclick'), __('Order', 'woo-oneclick'), __('Updated', 'woo-oneclick')] as $heading) {
+        foreach ([__('Reference', 'woo-oneclick'), __('Outcome', 'woo-oneclick'), __('From', 'woo-oneclick'), __('Path', 'woo-oneclick'), __('Customer', 'woo-oneclick'), __('Order', 'woo-oneclick'), __('Updated', 'woo-oneclick')] as $heading) {
             echo '<th>' . esc_html($heading) . '</th>';
         }
         echo '</tr></thead><tbody>';
@@ -165,10 +178,10 @@ class OneClick_Observability_Dashboard {
         foreach ($sessions as $session) {
             echo '<tr>';
             echo '<td><code>' . esc_html($session['session_ref'] ?? '') . '</code></td>';
-            echo '<td>' . esc_html($session['status'] ?? '') . '</td>';
-            echo '<td>' . esc_html($session['source_type'] ?? '') . '</td>';
-            echo '<td>' . esc_html($session['finalization_mode'] ?? '') . '</td>';
-            echo '<td>' . esc_html(($session['user_email'] ?? '') ?: ($session['user_id'] ?? 'anonymous')) . '</td>';
+            echo '<td>' . esc_html($this->label_outcome($session)) . '</td>';
+            echo '<td>' . esc_html($this->label_source($session['source_type'] ?? '')) . '</td>';
+            echo '<td>' . esc_html($this->label_path($session['finalization_mode'] ?? '')) . '</td>';
+            echo '<td>' . esc_html($this->label_customer($session)) . '</td>';
             echo '<td>' . esc_html($session['order_id'] ?? '') . '</td>';
             echo '<td>' . esc_html($session['updated_at'] ?? '') . '</td>';
             echo '</tr>';
@@ -229,6 +242,60 @@ class OneClick_Observability_Dashboard {
         return number_format(((float) $ratio) * 100, 1);
     }
 
+    private function label_source($source) {
+        $labels = [
+            'public_link' => __('Public link', 'woo-oneclick'),
+            'campaign_email' => __('Email campaign', 'woo-oneclick'),
+        ];
+        return $labels[$source] ?? ($source !== '' ? $source : __('Unknown', 'woo-oneclick'));
+    }
+
+    private function label_path($mode) {
+        $labels = [
+            'mit_purchase' => __('Saved card', 'woo-oneclick'),
+            'non_card_order' => __('Saved non-card order', 'woo-oneclick'),
+            'checkout' => __('Checkout', 'woo-oneclick'),
+        ];
+        return $labels[$mode] ?? ($mode !== '' ? $mode : __('Unknown', 'woo-oneclick'));
+    }
+
+    private function label_outcome($session) {
+        $status = $session['status'] ?? '';
+        $order_id = $session['order_id'] ?? null;
+
+        if ($status === 'finalized' && !empty($order_id)) {
+            return __('Ordered', 'woo-oneclick');
+        }
+        if ($status === 'cancelled') {
+            return __('Cancelled', 'woo-oneclick');
+        }
+        if ($status === 'failed') {
+            return __('Failed', 'woo-oneclick');
+        }
+        if ($status === 'finalizing') {
+            return __('Finalizing', 'woo-oneclick');
+        }
+        if ($status === 'active') {
+            $finalize_after = !empty($session['finalize_after']) ? strtotime($session['finalize_after']) : false;
+            if ($finalize_after && $finalize_after <= time() && empty($session['checkout_redirected_at']) && empty($order_id)) {
+                return __('Abandoned / no checkout', 'woo-oneclick');
+            }
+            return __('Open now', 'woo-oneclick');
+        }
+
+        return $status !== '' ? $status : __('Unknown', 'woo-oneclick');
+    }
+
+    private function label_customer($session) {
+        if (!empty($session['user_email'])) {
+            return $session['user_email'];
+        }
+        if (!empty($session['user_id']) && (int) $session['user_id'] > 0) {
+            return sprintf(__('User #%d', 'woo-oneclick'), (int) $session['user_id']);
+        }
+        return __('Anonymous', 'woo-oneclick');
+    }
+
     private function render_styles() {
         ?>
         <style>
@@ -237,6 +304,8 @@ class OneClick_Observability_Dashboard {
             .oneclick-grid{display:grid;gap:14px;margin:14px 0 24px}
             .oneclick-grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}
             .oneclick-grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+            .oneclick-grid-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+            .oneclick-grid-6{grid-template-columns:repeat(6,minmax(0,1fr))}
             .oneclick-card,.oneclick-panel{background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
             .oneclick-card-label{font-size:12px;font-weight:700;text-transform:uppercase;color:#646970;letter-spacing:.03em}
             .oneclick-card-value{font-size:30px;line-height:1.2;font-weight:700;color:#1d2327;margin-top:8px}
@@ -247,8 +316,9 @@ class OneClick_Observability_Dashboard {
             .oneclick-panel li{display:flex;justify-content:space-between;gap:12px;margin:0;padding:8px 0;border-bottom:1px solid #f0f0f1}
             .oneclick-panel li:last-child{border-bottom:0}
             .oneclick-sessions code{font-size:12px}
-            @media (max-width: 1100px){.oneclick-grid-4,.oneclick-grid-3,.oneclick-panels{grid-template-columns:repeat(2,minmax(0,1fr))}}
-            @media (max-width: 720px){.oneclick-grid-4,.oneclick-grid-3,.oneclick-panels{grid-template-columns:1fr}}
+            @media (max-width: 1280px){.oneclick-grid-6,.oneclick-grid-5{grid-template-columns:repeat(3,minmax(0,1fr))}}
+            @media (max-width: 1100px){.oneclick-grid-6,.oneclick-grid-5,.oneclick-grid-4,.oneclick-grid-3,.oneclick-panels{grid-template-columns:repeat(2,minmax(0,1fr))}}
+            @media (max-width: 720px){.oneclick-grid-6,.oneclick-grid-5,.oneclick-grid-4,.oneclick-grid-3,.oneclick-panels{grid-template-columns:1fr}}
         </style>
         <?php
     }
