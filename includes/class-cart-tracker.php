@@ -121,7 +121,7 @@ class OneClick_Cart_Tracker {
         ]);
 
         if (is_wp_error($result)) {
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 'OneClick Cart: Failed to track %s: %s',
                 $event_type,
                 $result->get_error_message()
@@ -174,7 +174,7 @@ class OneClick_Cart_Tracker {
             ]);
 
             if (is_wp_error($result)) {
-                error_log(sprintf(
+                oneclick_log(sprintf(
                     'OneClick Checkout Completion: report failed | session_id=%s | order_id=%d | error=%s',
                     substr($session_id, 0, 8) . '...',
                     (int) $order_id,
@@ -183,7 +183,7 @@ class OneClick_Cart_Tracker {
                 continue;
             }
 
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 'OneClick Checkout Completion: report OK | session_id=%s | order_id=%d',
                 substr($session_id, 0, 8) . '...',
                 (int) $order_id
@@ -203,7 +203,7 @@ class OneClick_Cart_Tracker {
         ]);
 
         if (is_wp_error($result)) {
-            error_log('OneClick Cart: Abandoned cart detection failed: ' . $result->get_error_message());
+            oneclick_log('OneClick Cart: Abandoned cart detection failed: ' . $result->get_error_message());
             return;
         }
 
@@ -211,7 +211,7 @@ class OneClick_Cart_Tracker {
         $emails_queued = $result['emails_queued'] ?? 0;
 
         if ($detected > 0 || $emails_queued > 0) {
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 'OneClick Cart: Detected %d abandoned carts, %d emails queued',
                 $detected,
                 $emails_queued

@@ -31,7 +31,7 @@ class OneClick_Periodic_Cron {
         $customers = $this->get_customer_data();
 
         if (empty($customers['emails'])) {
-            error_log('OneClick Periodic: No customers found, skipping');
+            oneclick_log('OneClick Periodic: No customers found, skipping');
             return;
         }
 
@@ -43,14 +43,14 @@ class OneClick_Periodic_Cron {
         ]);
 
         if (is_wp_error($result)) {
-            error_log('OneClick Periodic: Detection failed: ' . $result->get_error_message());
+            oneclick_log('OneClick Periodic: Detection failed: ' . $result->get_error_message());
             return;
         }
 
         $sent = $result['sent'] ?? 0;
         $skipped = $result['skipped'] ?? 0;
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             'OneClick Periodic: Check complete — %d emails sent, %d skipped (of %d customers)',
             $sent,
             $skipped,

@@ -126,15 +126,15 @@ class OneClick_Public_Links {
             exit;
         }
 
-        error_log('');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('🔗 PUBLIC LINK FÁZA B: SHOP URL → BACKEND PASSTHROUGH');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log(sprintf('   Browser otvoril /oneclick/%s na WordPress.', $short_id));
-        error_log('   Plugin je v tejto fáze iba passthrough redirect.');
-        error_log('   Plugin NEVOLÁ exchange, NEPOSIELA license key, NEVYTVÁRA session, NEČÍTA produkty/ceny.');
+        oneclick_log('');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('🔗 PUBLIC LINK FÁZA B: SHOP URL → BACKEND PASSTHROUGH');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log(sprintf('   Browser otvoril /oneclick/%s na WordPress.', $short_id));
+        oneclick_log('   Plugin je v tejto fáze iba passthrough redirect.');
+        oneclick_log('   Plugin NEVOLÁ exchange, NEPOSIELA license key, NEVYTVÁRA session, NEČÍTA produkty/ceny.');
         $visitor_key = self::get_or_create_visitor_key();
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '   Plugin nastavuje/obnovuje anonymnú visitor cookie | visitor_hash=%s... | cookie=%s | HttpOnly + SameSite=Lax | Secure=%s.',
             substr(hash('sha256', $visitor_key), 0, 12),
             self::VISITOR_COOKIE,
@@ -144,9 +144,9 @@ class OneClick_Public_Links {
         nocache_headers();
         $backend = rtrim(OneClick_API_Client::instance()->get_base_url(), '/');
         $target = $backend . '/public-click?id=' . rawurlencode($short_id);
-        error_log(sprintf('   302 redirect na backend: %s', $target));
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('');
+        oneclick_log(sprintf('   302 redirect na backend: %s', $target));
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
         // This route is intentionally an external passthrough to the trusted backend.
         wp_redirect($target, 302);
         exit;
@@ -161,12 +161,12 @@ class OneClick_Public_Links {
 
         nocache_headers();
 
-        error_log('');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('🔗 PUBLIC LINK FÁZA D: WORDPRESS CLAIM LANDING → LICENSED EXCHANGE');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log(sprintf('   Browser prišiel na non-REST route /oneclick/claim/%s...', substr($claim_code, 0, 8)));
-        error_log(sprintf(
+        oneclick_log('');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('🔗 PUBLIC LINK FÁZA D: WORDPRESS CLAIM LANDING → LICENSED EXCHANGE');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log(sprintf('   Browser prišiel na non-REST route /oneclick/claim/%s...', substr($claim_code, 0, 8)));
+        oneclick_log(sprintf(
             '   WordPress context: site_url=%s | home_url=%s | is_ssl=%s | is_user_logged_in=%s | current_user_id=%s',
             site_url(),
             home_url(),
@@ -176,16 +176,16 @@ class OneClick_Public_Links {
         ));
 
         if (is_user_logged_in() && current_user_can('manage_woocommerce')) {
-            error_log('   WordPress user má manage_woocommerce capability. Public shopper identity sa nepoužije; pokračuje anonymous routing.');
+            oneclick_log('   WordPress user má manage_woocommerce capability. Public shopper identity sa nepoužije; pokračuje anonymous routing.');
             $this->exchange_public_claim($claim_code, false, true);
         }
 
         if (is_user_logged_in()) {
-            error_log('   Logged-in user rozpoznaný na non-REST route. Plugin bez extra confirmation pripraví server-side user/payment context.');
+            oneclick_log('   Logged-in user rozpoznaný na non-REST route. Plugin bez extra confirmation pripraví server-side user/payment context.');
             $this->exchange_public_claim($claim_code, true, false);
         }
 
-        error_log('   Anonymous visitor. Plugin pokračuje do checkout-only exchange kontextu a potom použije anonymous routing policy.');
+        oneclick_log('   Anonymous visitor. Plugin pokračuje do checkout-only exchange kontextu a potom použije anonymous routing policy.');
         $this->exchange_public_claim($claim_code, false, true);
     }
 
@@ -198,12 +198,12 @@ class OneClick_Public_Links {
 
         nocache_headers();
 
-        error_log('');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('🔗 EMAIL LINK FÁZA 4: WORDPRESS EMAIL CLAIM LANDING → IDENTITY GATE');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log(sprintf('   Browser prišiel na non-REST route /oneclick/email-claim/%s...', substr($claim_code, 0, 8)));
-        error_log(sprintf(
+        oneclick_log('');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('🔗 EMAIL LINK FÁZA 4: WORDPRESS EMAIL CLAIM LANDING → IDENTITY GATE');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log(sprintf('   Browser prišiel na non-REST route /oneclick/email-claim/%s...', substr($claim_code, 0, 8)));
+        oneclick_log(sprintf(
             '   WordPress context: site_url=%s | home_url=%s | is_ssl=%s | is_user_logged_in=%s | current_user_id=%s',
             site_url(),
             home_url(),
@@ -211,7 +211,7 @@ class OneClick_Public_Links {
             is_user_logged_in() ? 'yes' : 'no',
             get_current_user_id() ?: 'anonymous'
         ));
-        error_log('   Plugin pošle cookie-derived user context iba server-side v licencovanom exchange requeste.');
+        oneclick_log('   Plugin pošle cookie-derived user context iba server-side v licencovanom exchange requeste.');
 
         if (!class_exists('OneClick_Purchase_Handler')) {
             $this->render_claim_error(
@@ -226,7 +226,7 @@ class OneClick_Public_Links {
         $result = $handler->exchange_code_with_backend($claim_code, $context);
 
         if (is_wp_error($result)) {
-            error_log('OneClick Email Link: exchange-code failed — ' . $result->get_error_message());
+            oneclick_log('OneClick Email Link: exchange-code failed — ' . $result->get_error_message());
             return $handler->render_purchase_error_page(
                 __('Invalid Purchase Link', 'woo-oneclick'),
                 __('This purchase link is invalid or has expired. Please contact support if you need assistance.', 'woo-oneclick')
@@ -234,7 +234,7 @@ class OneClick_Public_Links {
         }
 
         if (empty($result['success']) || empty($result['payload'])) {
-            error_log('OneClick Email Link: exchange-code returned empty or unsuccessful response');
+            oneclick_log('OneClick Email Link: exchange-code returned empty or unsuccessful response');
             return $handler->render_purchase_error_page(
                 __('Invalid Purchase Link', 'woo-oneclick'),
                 __('Could not verify this purchase window. Please contact support.', 'woo-oneclick')
@@ -243,20 +243,20 @@ class OneClick_Public_Links {
 
         $payload = $result['payload'];
         if (($payload['flow'] ?? '') !== 'purchase_session') {
-            error_log('OneClick Email Link: email claim did not return purchase_session flow');
+            oneclick_log('OneClick Email Link: email claim did not return purchase_session flow');
             return $handler->render_purchase_error_page(
                 __('Invalid Purchase Link', 'woo-oneclick'),
                 __('This email purchase link could not open a purchase window.', 'woo-oneclick')
             );
         }
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '   Email identity gate výsledok | identity_verified=%s | finalization_mode=%s',
             !empty($payload['identity_verified']) ? 'yes' : 'no',
             $payload['finalization_mode'] ?? 'unknown'
         ));
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
 
         return $handler->redirect_to_purchase_session($payload);
     }
@@ -274,7 +274,7 @@ class OneClick_Public_Links {
         $result = $handler->exchange_code_with_backend($claim_code, $context);
 
         if (is_wp_error($result)) {
-            error_log('OneClick Public Link: exchange-code failed — ' . $result->get_error_message());
+            oneclick_log('OneClick Public Link: exchange-code failed — ' . $result->get_error_message());
             return $handler->render_purchase_error_page(
                 __('Invalid Purchase Link', 'woo-oneclick'),
                 __('This purchase link is invalid or has expired. Please contact support if you need assistance.', 'woo-oneclick')
@@ -282,7 +282,7 @@ class OneClick_Public_Links {
         }
 
         if (empty($result['success']) || empty($result['payload'])) {
-            error_log('OneClick Public Link: exchange-code returned empty or unsuccessful response');
+            oneclick_log('OneClick Public Link: exchange-code returned empty or unsuccessful response');
             return $handler->render_purchase_error_page(
                 __('Invalid Purchase Link', 'woo-oneclick'),
                 __('Could not verify this purchase window. Please contact support.', 'woo-oneclick')
@@ -291,7 +291,7 @@ class OneClick_Public_Links {
 
         $payload = $result['payload'];
         if (($payload['flow'] ?? '') !== 'purchase_session') {
-            error_log('OneClick Public Link: public claim did not return purchase_session flow');
+            oneclick_log('OneClick Public Link: public claim did not return purchase_session flow');
             return $handler->render_purchase_error_page(
                 __('Invalid Purchase Link', 'woo-oneclick'),
                 __('This public purchase link could not open a purchase window.', 'woo-oneclick')
@@ -305,7 +305,7 @@ class OneClick_Public_Links {
             }
 
             if (($payload['finalization_mode'] ?? '') === 'checkout' && class_exists('OneClick_Purchase_Session')) {
-                error_log('   Anonymous destination=checkout. Plugin naplní Woo cart a presmeruje priamo na checkout bez purchase window.');
+                oneclick_log('   Anonymous destination=checkout. Plugin naplní Woo cart a presmeruje priamo na checkout bez purchase window.');
                 $session_handler = new OneClick_Purchase_Session(false);
                 return $session_handler->redirect_to_checkout_for_session_payload($payload);
             }
@@ -341,7 +341,7 @@ class OneClick_Public_Links {
         }
 
         $url = get_permalink($product_id);
-        error_log(sprintf('   Anonymous destination=product. Plugin presmeruje na primary product #%d: %s', $product_id, $url));
+        oneclick_log(sprintf('   Anonymous destination=product. Plugin presmeruje na primary product #%d: %s', $product_id, $url));
         wp_safe_redirect($url, 302);
         exit;
     }
@@ -387,22 +387,22 @@ class OneClick_Public_Links {
         $id = absint($_POST['public_link_id'] ?? 0);
 
         if ($submit === 'delete' && $id) {
-            error_log('');
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            error_log('🔗 PUBLIC LINK FÁZA A: PLUGIN ADMIN → BACKEND (disable/delete)');
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            error_log(sprintf('   Admin vypína public one-click link id=%d.', $id));
-            error_log('   Plugin volá DELETE /api/public-links/{id}; backend iba nastaví status=disabled.');
+            oneclick_log('');
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log('🔗 PUBLIC LINK FÁZA A: PLUGIN ADMIN → BACKEND (disable/delete)');
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log(sprintf('   Admin vypína public one-click link id=%d.', $id));
+            oneclick_log('   Plugin volá DELETE /api/public-links/{id}; backend iba nastaví status=disabled.');
             $result = OneClick_API_Client::instance()->delete('/api/public-links/' . $id);
             if (is_wp_error($result)) {
-                error_log('   ❌ Backend disable zlyhal: ' . $result->get_error_message());
+                oneclick_log('   ❌ Backend disable zlyhal: ' . $result->get_error_message());
                 set_transient('oneclick_public_link_error', $result->get_error_message(), 30);
                 wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '&error=1'));
                 exit;
             }
-            error_log('   ✅ Link je disabled. Existujúca shop URL už nevytvorí nový claim/session.');
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            error_log('');
+            oneclick_log('   ✅ Link je disabled. Existujúca shop URL už nevytvorí nový claim/session.');
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log('');
             wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '&deleted=1'));
             exit;
         }
@@ -417,11 +417,11 @@ class OneClick_Public_Links {
         $api = OneClick_API_Client::instance();
         $action_label = $id ? 'update' : 'create';
         $primary_product = (int) ($_POST['primary_product'] ?? 0);
-        error_log('');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('🔗 PUBLIC LINK FÁZA A: ADMIN GENERUJE PUBLIC ONE-CLICK LINK');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log(sprintf(
+        oneclick_log('');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('🔗 PUBLIC LINK FÁZA A: ADMIN GENERUJE PUBLIC ONE-CLICK LINK');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log(sprintf(
             '   Plugin admin pripravuje %s request | link_id=%d | name="%s" | primary_product=%d | products=%d | status=%s',
             $action_label,
             $id,
@@ -430,29 +430,29 @@ class OneClick_Public_Links {
             count($data['products'] ?? []),
             $data['status'] ?? 'active'
         ));
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '   Discount: %s %s | Produkty obsahujú locked price snapshot + currency + image_url.',
             $data['discount_percent'] ?? 'none',
             $data['discount_type'] ?? ''
         ));
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '   Plugin volá backend %s /api/public-links%s s X-License-Key server-side.',
             $id ? 'PUT' : 'POST',
             $id ? '/' . $id : ''
         ));
         $result = $id ? $api->put('/api/public-links/' . $id, $data) : $api->post('/api/public-links', $data);
         if (is_wp_error($result)) {
-            error_log('   ❌ Backend public link save zlyhal: ' . $result->get_error_message());
+            oneclick_log('   ❌ Backend public link save zlyhal: ' . $result->get_error_message());
             set_transient('oneclick_public_link_error', $result->get_error_message(), 30);
             wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '&error=1'));
             exit;
         }
         $short_id = sanitize_text_field($result['short_id'] ?? '');
         $shop_url = $short_id ? home_url('/oneclick/' . $short_id) : '(missing short_id)';
-        error_log(sprintf('   ✅ Backend vrátil short_id=%s. Plugin zobrazí shop URL: %s', $short_id, $shop_url));
-        error_log('   short_id nie je JWT ani payload; je to iba backendom evidovaný opaque identifikátor.');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('');
+        oneclick_log(sprintf('   ✅ Backend vrátil short_id=%s. Plugin zobrazí shop URL: %s', $short_id, $shop_url));
+        oneclick_log('   short_id nie je JWT ani payload; je to iba backendom evidovaný opaque identifikátor.');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
 
         wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '&saved=1'));
         exit;

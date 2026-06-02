@@ -1233,10 +1233,10 @@ class OneClick_Purchase_Session {
     }
 
     public function process_due_sessions() {
-        error_log('');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('⏲️ SESSION FLOW: ACTION SCHEDULER → FINALIZÁCIA PURCHASE SESSIONS');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('⏲️ SESSION FLOW: ACTION SCHEDULER → FINALIZÁCIA PURCHASE SESSIONS');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
         $result = $this->backend_session_post('/api/purchase-sessions/claim-due', [
             'site_url' => site_url(),
@@ -1244,17 +1244,17 @@ class OneClick_Purchase_Session {
         ], ['timeout' => 60]);
 
         if (is_wp_error($result)) {
-            error_log('   ❌ Claim due sessions zlyhal: ' . $result->get_error_message());
+            oneclick_log('   ❌ Claim due sessions zlyhal: ' . $result->get_error_message());
             return;
         }
 
         $sessions = $result['sessions'] ?? [];
-        error_log(sprintf('   Backend vrátil due sessions: %d', count($sessions)));
+        oneclick_log(sprintf('   Backend vrátil due sessions: %d', count($sessions)));
         foreach ($sessions as $session) {
             $this->finalize_session($session);
         }
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
     }
 
     private function handle_checkout_redirect($body) {
@@ -1307,7 +1307,7 @@ class OneClick_Purchase_Session {
         }
 
         WC()->cart->calculate_totals();
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '🛒 PUBLIC LINK CHECKOUT FALLBACK | Session %s pridaná do košíka, items=%d',
             $session['session_id'] ?? '',
             count($session['items'] ?? [])
@@ -1361,7 +1361,7 @@ class OneClick_Purchase_Session {
             );
         }
 
-        error_log(sprintf('   ✅ Direct checkout pripravený pre session %s. Redirect: %s', $session_id, $checkout_url));
+        oneclick_log(sprintf('   ✅ Direct checkout pripravený pre session %s. Redirect: %s', $session_id, $checkout_url));
         wp_safe_redirect($checkout_url, 302);
         exit;
     }
@@ -1391,7 +1391,7 @@ class OneClick_Purchase_Session {
         $payment_method = $this->resolve_payment_method($session);
         $payment_intent_id = '';
 
-        error_log(sprintf('   ▶️ Finalizujem session %s | items=%d | total=%s %s | method=%s', $session_id, count($items), $total, $currency, $payment_method));
+        oneclick_log(sprintf('   ▶️ Finalizujem session %s | items=%d | total=%s %s | method=%s', $session_id, count($items), $total, $currency, $payment_method));
 
         foreach ($items as $item) {
             $product = wc_get_product((int) $item['product_id']);
@@ -1417,13 +1417,13 @@ class OneClick_Purchase_Session {
 
             if (empty($charge['success'])) {
                 $error = $charge['error'] ?? 'Stripe charge failed';
-                error_log(sprintf('   ❌ Stripe combined MIT zlyhal pre session %s: %s', $session_id, $error));
+                oneclick_log(sprintf('   ❌ Stripe combined MIT zlyhal pre session %s: %s', $session_id, $error));
                 $this->report_session_result($session, false, 0, $charge['payment_intent_id'] ?? '', $error);
                 return;
             }
 
             $payment_intent_id = $charge['payment_intent_id'];
-            error_log(sprintf('   ✅ Stripe combined MIT úspešný. PaymentIntent=%s', $payment_intent_id));
+            oneclick_log(sprintf('   ✅ Stripe combined MIT úspešný. PaymentIntent=%s', $payment_intent_id));
         }
 
         $creator = new OneClick_Order_Creator();
@@ -1447,7 +1447,7 @@ class OneClick_Purchase_Session {
             return;
         }
 
-        error_log(sprintf('   ✅ Session %s dokončená jednou objednávkou #%d.', $session_id, $order_id));
+        oneclick_log(sprintf('   ✅ Session %s dokončená jednou objednávkou #%d.', $session_id, $order_id));
         $this->report_session_result($session, true, $order_id, $payment_intent_id, '');
     }
 
@@ -1463,7 +1463,7 @@ class OneClick_Purchase_Session {
         ], ['timeout' => 60]);
 
         if (is_wp_error($result)) {
-            error_log('   ❌ Report finalization zlyhal: ' . $result->get_error_message());
+            oneclick_log('   ❌ Report finalization zlyhal: ' . $result->get_error_message());
         }
     }
 
@@ -1587,11 +1587,11 @@ class OneClick_Purchase_Session {
         ]);
 
         if (is_wp_error($result)) {
-            error_log('OneClick Checkout Redirect: report failed — ' . $result->get_error_message());
+            oneclick_log('OneClick Checkout Redirect: report failed — ' . $result->get_error_message());
             return;
         }
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '   Checkout redirect report OK | session_id=%s | finalization_mode=%s',
             $session_id,
             $session['finalization_mode'] ?? 'unknown'

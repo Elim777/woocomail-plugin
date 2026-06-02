@@ -246,7 +246,7 @@ class OneClick_Email_Branding {
         if (!is_wp_error($token_result) && !empty($token_result['preview_token'])) {
             $preview_token = $token_result['preview_token'];
         } else {
-            error_log('OneClick Branding: Failed to fetch preview token: ' . (is_wp_error($token_result) ? $token_result->get_error_message() : 'empty response'));
+            oneclick_log('OneClick Branding: Failed to fetch preview token: ' . (is_wp_error($token_result) ? $token_result->get_error_message() : 'empty response'));
         }
         $preview_url = $backend_url . '/api/branding/preview?' . http_build_query([
             'site_url' => site_url(),

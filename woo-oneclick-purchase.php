@@ -194,6 +194,9 @@ function oneclick_load_classes() {
         return;
     }
 
+    // Logger must load early so all plugin components can write to WooCommerce logs.
+    require_once ONECLICK_PLUGIN_DIR . 'includes/class-logger.php';
+
     // API client (must be loaded before settings — settings uses it)
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-api-client.php';
 

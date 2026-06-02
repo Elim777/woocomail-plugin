@@ -58,7 +58,7 @@ class OneClick_Stripe_Reconciliation {
             return;
         }
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             'OneClick Reconciliation: Missing PM data for user #%d (customer_id: %s, pm_id: %s) — reconciling',
             $user_id,
             $customer_id ?: 'MISSING',
@@ -73,7 +73,7 @@ class OneClick_Stripe_Reconciliation {
         }
 
         if (empty($pi_id)) {
-            error_log(sprintf('OneClick Reconciliation: No payment intent ID on order #%d, cannot reconcile', $order_id));
+            oneclick_log(sprintf('OneClick Reconciliation: No payment intent ID on order #%d, cannot reconcile', $order_id));
             return;
         }
 
@@ -88,7 +88,7 @@ class OneClick_Stripe_Reconciliation {
         $stripe_pm_id = $pi_data['payment_method'] ?? '';
 
         if (empty($stripe_customer_id) || empty($stripe_pm_id)) {
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 'OneClick Reconciliation: Stripe PI %s missing customer/pm (customer: %s, pm: %s)',
                 $pi_id,
                 $stripe_customer_id ?: 'none',
@@ -100,18 +100,18 @@ class OneClick_Stripe_Reconciliation {
         // Save missing data
         if (empty($customer_id)) {
             update_user_meta($user_id, '_stripe_customer_id', $stripe_customer_id);
-            error_log(sprintf('OneClick Reconciliation: Saved _stripe_customer_id %s for user #%d', $stripe_customer_id, $user_id));
+            oneclick_log(sprintf('OneClick Reconciliation: Saved _stripe_customer_id %s for user #%d', $stripe_customer_id, $user_id));
         }
 
         if (empty($pm_id)) {
             update_user_meta($user_id, '_stripe_default_payment_method', $stripe_pm_id);
-            error_log(sprintf('OneClick Reconciliation: Saved _stripe_default_payment_method %s for user #%d', $stripe_pm_id, $user_id));
+            oneclick_log(sprintf('OneClick Reconciliation: Saved _stripe_default_payment_method %s for user #%d', $stripe_pm_id, $user_id));
         }
 
         // Also save WC Payment Token if missing
         $this->ensure_wc_payment_token($user_id, $stripe_customer_id, $stripe_pm_id, $pi_data);
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             'OneClick Reconciliation: Reconciliation complete for user #%d, order #%d',
             $user_id,
             $order_id
@@ -138,7 +138,7 @@ class OneClick_Stripe_Reconciliation {
         ]);
 
         if (is_wp_error($response)) {
-            error_log('OneClick Reconciliation: Stripe API error: ' . $response->get_error_message());
+            oneclick_log('OneClick Reconciliation: Stripe API error: ' . $response->get_error_message());
             return null;
         }
 
@@ -146,7 +146,7 @@ class OneClick_Stripe_Reconciliation {
         $body = json_decode(wp_remote_retrieve_body($response), true);
 
         if ($status_code !== 200 || empty($body['id'])) {
-            error_log(sprintf('OneClick Reconciliation: Stripe API returned %d for PI %s', $status_code, $pi_id));
+            oneclick_log(sprintf('OneClick Reconciliation: Stripe API returned %d for PI %s', $status_code, $pi_id));
             return null;
         }
 
@@ -182,7 +182,7 @@ class OneClick_Stripe_Reconciliation {
         );
 
         if (is_wp_error($response)) {
-            error_log('OneClick Reconciliation: PM list API error: ' . $response->get_error_message());
+            oneclick_log('OneClick Reconciliation: PM list API error: ' . $response->get_error_message());
             return false;
         }
 
@@ -190,7 +190,7 @@ class OneClick_Stripe_Reconciliation {
         $methods = $body['data'] ?? [];
 
         if (empty($methods)) {
-            error_log(sprintf('OneClick Reconciliation: No payment methods found for customer %s', $customer_id));
+            oneclick_log(sprintf('OneClick Reconciliation: No payment methods found for customer %s', $customer_id));
             return false;
         }
 
@@ -231,7 +231,7 @@ class OneClick_Stripe_Reconciliation {
         }
 
         if (empty($card['last4'])) {
-            error_log(sprintf('OneClick Reconciliation: Cannot create WC token — no card details for PM %s', $pm_id));
+            oneclick_log(sprintf('OneClick Reconciliation: Cannot create WC token — no card details for PM %s', $pm_id));
             return;
         }
 
@@ -247,7 +247,7 @@ class OneClick_Stripe_Reconciliation {
         $token->set_default(true);
         $token->save();
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             'OneClick Reconciliation: Created WC Payment Token for user #%d (%s ending %s)',
             $user_id,
             $card['brand'] ?? 'card',

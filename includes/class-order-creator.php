@@ -64,7 +64,7 @@ class OneClick_Order_Creator {
             ]);
 
             if (is_wp_error($order)) {
-                error_log('OneClick Order Creator: Failed to create order - ' . $order->get_error_message());
+                oneclick_log('OneClick Order Creator: Failed to create order - ' . $order->get_error_message());
                 return $order;
             }
 
@@ -157,7 +157,7 @@ class OneClick_Order_Creator {
                     break;
             }
 
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 'OneClick Order Creator: Order #%d created [%s] for user #%d, product #%d (%s)',
                 $order->get_id(),
                 $payment_method,
@@ -169,7 +169,7 @@ class OneClick_Order_Creator {
             return $order->get_id();
 
         } catch (Exception $e) {
-            error_log('OneClick Order Creator Exception: ' . $e->getMessage());
+            oneclick_log('OneClick Order Creator Exception: ' . $e->getMessage());
             return new WP_Error('creation_failed', $e->getMessage());
         }
     }
@@ -204,7 +204,7 @@ class OneClick_Order_Creator {
                 'return' => 'ids',
             ]);
             if (!empty($existing)) {
-                error_log(sprintf('OneClick Order Creator: Session %s already has order #%d', $session_id, $existing[0]));
+                oneclick_log(sprintf('OneClick Order Creator: Session %s already has order #%d', $session_id, $existing[0]));
                 return (int) $existing[0];
             }
 
@@ -280,7 +280,7 @@ class OneClick_Order_Creator {
                     break;
             }
 
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 'OneClick Order Creator: Session order #%d created [%s] for user #%d, session %s, items=%d',
                 $order->get_id(),
                 $payment_method,
@@ -291,7 +291,7 @@ class OneClick_Order_Creator {
 
             return $order->get_id();
         } catch (Exception $e) {
-            error_log('OneClick Session Order Creator Exception: ' . $e->getMessage());
+            oneclick_log('OneClick Session Order Creator Exception: ' . $e->getMessage());
             return new WP_Error('session_order_creation_failed', $e->getMessage());
         }
     }
@@ -363,7 +363,7 @@ class OneClick_Order_Creator {
         $last_order = $this->get_last_order($user_id);
 
         if (!$last_order) {
-            error_log(sprintf('OneClick Order Creator: No last order for shipping copy, user #%d', $user_id));
+            oneclick_log(sprintf('OneClick Order Creator: No last order for shipping copy, user #%d', $user_id));
             return;
         }
 
@@ -374,7 +374,7 @@ class OneClick_Order_Creator {
         $shipping_items = $source_order->get_shipping_methods();
 
         if (empty($shipping_items)) {
-            error_log(sprintf('OneClick Order Creator: Source order #%d has no shipping methods', $source_order->get_id()));
+            oneclick_log(sprintf('OneClick Order Creator: Source order #%d has no shipping methods', $source_order->get_id()));
             return;
         }
 
@@ -404,7 +404,7 @@ class OneClick_Order_Creator {
             $order->add_item($new_shipping);
         }
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             'OneClick Order Creator: Copied %d shipping method(s) from order #%d',
             count($shipping_items),
             $source_order->get_id()

@@ -163,9 +163,9 @@ class OneClick_Settings {
             ]);
 
             if (is_wp_error($activation)) {
-                error_log('OneClick License: Session activation failed: ' . $activation->get_error_message());
+                oneclick_log('OneClick License: Session activation failed: ' . $activation->get_error_message());
             } else {
-                error_log('OneClick License: Session activation result: ' . wp_json_encode($activation));
+                oneclick_log('OneClick License: Session activation result: ' . wp_json_encode($activation));
             }
         }
 
@@ -192,7 +192,7 @@ class OneClick_Settings {
         ]);
 
         if (is_wp_error($result)) {
-            error_log('OneClick License: Failed to check license: ' . $result->get_error_message());
+            oneclick_log('OneClick License: Failed to check license: ' . $result->get_error_message());
             return $result;
         }
 
@@ -219,7 +219,7 @@ class OneClick_Settings {
         // Sync backend public key (needed for JWT verification)
         $this->sync_backend_public_key();
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             'OneClick License: Refreshed — tier=%s, status=%s, quota=%d',
             $result['tier'] ?? 'free',
             $result['status'] ?? 'free',
@@ -240,18 +240,18 @@ class OneClick_Settings {
         $result = $api->get('/api/public-key');
 
         if (is_wp_error($result)) {
-            error_log('OneClick: Failed to sync backend public key: ' . $result->get_error_message());
+            oneclick_log('OneClick: Failed to sync backend public key: ' . $result->get_error_message());
             return;
         }
 
         $pub_key_b64 = $result['public_key_base64'] ?? '';
         if (empty($pub_key_b64)) {
-            error_log('OneClick: Backend returned empty public key');
+            oneclick_log('OneClick: Backend returned empty public key');
             return;
         }
 
         update_option('oneclick_backend_public_key', $pub_key_b64, true);
-        error_log('OneClick: Backend public key synced successfully');
+        oneclick_log('OneClick: Backend public key synced successfully');
     }
 
     /**

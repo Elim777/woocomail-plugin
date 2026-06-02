@@ -186,8 +186,8 @@ One-Click Purchase
 ├── One-Click Links   Public marketing links
 ├── Branding          Email and purchase experience branding
 ├── AI Setup          AI campaign suggestions
-├── Compatibility     System checks and test email
-└── JWT Test          Legacy/compatibility JWT diagnostics
+├── Compatibility     Current-architecture system checks and diagnostic email delivery
+└── Backend Token Diagnostics
 ```
 
 ## Plugin Structure
@@ -198,6 +198,7 @@ woo-oneclick-purchase/
 ├── composer.json
 ├── includes/
 │   ├── class-api-client.php
+│   ├── class-logger.php
 │   ├── class-settings.php
 │   ├── class-campaign-trigger.php
 │   ├── class-purchase-handler.php
@@ -225,6 +226,24 @@ woo-oneclick-purchase/
 ├── vendor/
 └── scripts/
 ```
+
+## Production Logging
+
+OneClick plugin logs are routed to WooCommerce logs via `wc_get_logger()`, so production debugging can happen in `WooCommerce -> Status -> Logs` without relying on `wp-content/debug.log`.
+
+Primary log sources:
+
+- `oneclick-core`
+- `oneclick-backend`
+- `oneclick-email`
+- `oneclick-public`
+- `oneclick-session`
+- `oneclick-stripe`
+- `oneclick-order`
+- `oneclick-cart`
+- `oneclick-ai`
+
+The logger preserves the existing readable flow format, including `FÁZA`, `Step x/29`, emoji markers and separators. If WooCommerce logging is unavailable, it falls back to PHP `error_log()`.
 
 Removed legacy runtime pieces:
 

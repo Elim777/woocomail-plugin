@@ -59,25 +59,25 @@ class OneClick_Purchase_Handler {
     public function handle_purchase($request) {
         $code = $request->get_param('code');
 
-        error_log('');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('💳 FÁZA 4: EXCHANGE CODE + STRIPE MIT / CHECKOUT FALLBACK');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('');
-        error_log('🖱️ Step 23/29 | BROWSER → PLUGIN');
-        error_log('   Browser nasledoval 302 redirect z backendu a odoslal');
-        error_log(sprintf('   GET /wp-json/oneclick/v1/purchase?code=%s... na WordPress.', substr($code, 0, 8)));
-        error_log('   WordPress REST API matchol route (registrovaná v __construct() tejto triedy)');
-        error_log('   a zavolal callback handle_purchase($request).');
-        error_log('   V URL je len opaque code — plugin nevie čo znamená, musí ho vymeniť na backende.');
-        error_log('');
-        error_log('📤 Step 24/29 | PLUGIN → BACKEND (outbound HTTP)');
-        error_log(sprintf('   Plugin volá OneClick_API_Client::post("/api/purchase/exchange-code", ["code" => "%s..."]).', substr($code, 0, 8)));
-        error_log('   Toto je outbound request — plugin si VYBERÁ komu zavolá (známa URL backendu).');
-        error_log('   V hlavičkách ide X-License-Key (z wp_options) — tým plugin preukazuje identitu.');
-        error_log('   Backend atomicky vymení code za payload (jednorazové — druhé zavolanie vráti 404).');
-        error_log('');
-        error_log(sprintf(
+        oneclick_log('');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('💳 FÁZA 4: EXCHANGE CODE + STRIPE MIT / CHECKOUT FALLBACK');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
+        oneclick_log('🖱️ Step 23/29 | BROWSER → PLUGIN');
+        oneclick_log('   Browser nasledoval 302 redirect z backendu a odoslal');
+        oneclick_log(sprintf('   GET /wp-json/oneclick/v1/purchase?code=%s... na WordPress.', substr($code, 0, 8)));
+        oneclick_log('   WordPress REST API matchol route (registrovaná v __construct() tejto triedy)');
+        oneclick_log('   a zavolal callback handle_purchase($request).');
+        oneclick_log('   V URL je len opaque code — plugin nevie čo znamená, musí ho vymeniť na backende.');
+        oneclick_log('');
+        oneclick_log('📤 Step 24/29 | PLUGIN → BACKEND (outbound HTTP)');
+        oneclick_log(sprintf('   Plugin volá OneClick_API_Client::post("/api/purchase/exchange-code", ["code" => "%s..."]).', substr($code, 0, 8)));
+        oneclick_log('   Toto je outbound request — plugin si VYBERÁ komu zavolá (známa URL backendu).');
+        oneclick_log('   V hlavičkách ide X-License-Key (z wp_options) — tým plugin preukazuje identitu.');
+        oneclick_log('   Backend atomicky vymení code za payload (jednorazové — druhé zavolanie vráti 404).');
+        oneclick_log('');
+        oneclick_log(sprintf(
             '   WordPress request context: site_url=%s | home_url=%s | is_ssl=%s | is_user_logged_in=%s | current_user_id=%s',
             site_url(),
             home_url(),
@@ -85,16 +85,16 @@ class OneClick_Purchase_Handler {
             is_user_logged_in() ? 'yes' : 'no',
             get_current_user_id() ?: 'anonymous'
         ));
-        error_log('');
-        error_log('   ══ Backend vykonáva Steps 25-26 (viď Render logy) ══');
-        error_log('');
+        oneclick_log('');
+        oneclick_log('   ══ Backend vykonáva Steps 25-26 (viď Render logy) ══');
+        oneclick_log('');
 
         // Step 1: Exchange opaque code for verified payload via backend.
         $result = $this->exchange_code_with_backend($code);
 
         if (is_wp_error($result)) {
             $error = $result->get_error_message();
-            error_log('OneClick Purchase: exchange-code failed — ' . $error);
+            oneclick_log('OneClick Purchase: exchange-code failed — ' . $error);
 
             if (stripos($error, 'already redeemed') !== false) {
                 return $this->render_error_page(
@@ -110,7 +110,7 @@ class OneClick_Purchase_Handler {
         }
 
         if (empty($result['success'])) {
-            error_log('OneClick Purchase: exchange-code returned success=false');
+            oneclick_log('OneClick Purchase: exchange-code returned success=false');
             return $this->render_error_page(
                 __('Invalid Purchase Link', 'woo-oneclick'),
                 __('Could not verify purchase. Please contact support.', 'woo-oneclick')
@@ -137,9 +137,9 @@ class OneClick_Purchase_Handler {
             $click_behavior = 'mit_purchase';
         }
 
-        error_log('📥 Step 26/29 | BACKEND → PLUGIN (odpoveď prijatá)');
-        error_log('   Backend vrátil HTTP 200 s JSON payloadom. Plugin dekódoval cez json_decode().');
-        error_log(sprintf(
+        oneclick_log('📥 Step 26/29 | BACKEND → PLUGIN (odpoveď prijatá)');
+        oneclick_log('   Backend vrátil HTTP 200 s JSON payloadom. Plugin dekódoval cez json_decode().');
+        oneclick_log(sprintf(
             '   product_id=%d | user_id=%d | price=%s | currency=%s | click_behavior=%s',
             $product_id,
             $user_id,
@@ -148,13 +148,13 @@ class OneClick_Purchase_Handler {
             $click_behavior
         ));
         if (!empty($idempotency_key)) {
-            error_log(sprintf('   idempotency_key=%s... (vygenerovaný backendom, pôjde do Stripe hlavičky pri MIT vetve)', substr($idempotency_key, 0, 8)));
+            oneclick_log(sprintf('   idempotency_key=%s... (vygenerovaný backendom, pôjde do Stripe hlavičky pri MIT vetve)', substr($idempotency_key, 0, 8)));
         }
-        error_log('');
+        oneclick_log('');
 
         // Validate required data
         if (empty($product_id) || empty($user_id) || empty($price)) {
-            error_log('OneClick Purchase: Missing required data in payload');
+            oneclick_log('OneClick Purchase: Missing required data in payload');
             return $this->render_error_page(
                 __('Invalid Data', 'woo-oneclick'),
                 __('The purchase link is missing required information. Please contact support.', 'woo-oneclick')
@@ -164,7 +164,7 @@ class OneClick_Purchase_Handler {
         // Get product
         $product = wc_get_product($product_id);
         if (!$product) {
-            error_log(sprintf('OneClick Purchase: Product #%d not found', $product_id));
+            oneclick_log(sprintf('OneClick Purchase: Product #%d not found', $product_id));
             return $this->render_error_page(
                 __('Product Not Available', 'woo-oneclick'),
                 __('The product you\'re trying to purchase is no longer available.', 'woo-oneclick')
@@ -174,7 +174,7 @@ class OneClick_Purchase_Handler {
         // Get user
         $user = get_user_by('id', $user_id);
         if (!$user) {
-            error_log(sprintf('OneClick Purchase: User #%d not found', $user_id));
+            oneclick_log(sprintf('OneClick Purchase: User #%d not found', $user_id));
             return $this->render_error_page(
                 __('User Not Found', 'woo-oneclick'),
                 __('Your user account could not be found. Please contact support.', 'woo-oneclick')
@@ -188,9 +188,9 @@ class OneClick_Purchase_Handler {
         $payment_method = $is_test ? 'test' : $this->detect_payment_method($user_id, $original_order_id);
 
         if (!$is_test && $click_behavior === 'cart_checkout') {
-            error_log('🛒 Step 27/29 | PLUGIN → WOOCOMMERCE CART (checkout fallback)');
-            error_log('   click_behavior=cart_checkout, takže plugin nespúšťa Stripe MIT a nevytvára objednávku.');
-            error_log('   Produkt pridá do WooCommerce košíka so zľavnenou cenou z payloadu a presmeruje na checkout.');
+            oneclick_log('🛒 Step 27/29 | PLUGIN → WOOCOMMERCE CART (checkout fallback)');
+            oneclick_log('   click_behavior=cart_checkout, takže plugin nespúšťa Stripe MIT a nevytvára objednávku.');
+            oneclick_log('   Produkt pridá do WooCommerce košíka so zľavnenou cenou z payloadu a presmeruje na checkout.');
 
             return $this->redirect_to_checkout_with_cart_item(
                 $product,
@@ -206,16 +206,16 @@ class OneClick_Purchase_Handler {
         $payment_intent_id = '';
 
         if ($payment_method === 'stripe') {
-            error_log('💰 Step 27/29 | PLUGIN → STRIPE (MIT platba)');
-            error_log(sprintf('   detect_payment_method(%d, %s) vrátil "stripe".', $user_id, $original_order_id ?: 'null'));
-            error_log('   Plugin volá OneClick_Stripe::charge_saved_payment_method().');
-            error_log(sprintf(
+            oneclick_log('💰 Step 27/29 | PLUGIN → STRIPE (MIT platba)');
+            oneclick_log(sprintf('   detect_payment_method(%d, %s) vrátil "stripe".', $user_id, $original_order_id ?: 'null'));
+            oneclick_log('   Plugin volá OneClick_Stripe::charge_saved_payment_method().');
+            oneclick_log(sprintf(
                 '   amount=%d (v centoch) | currency=%s | off_session=true | confirm=true',
                 (int) round($price * 100),
                 get_woocommerce_currency()
             ));
             if (!empty($idempotency_key)) {
-                error_log(sprintf('   Idempotency-Key: %s... (z backendu — ochrana proti double-charge)', substr($idempotency_key, 0, 8)));
+                oneclick_log(sprintf('   Idempotency-Key: %s... (z backendu — ochrana proti double-charge)', substr($idempotency_key, 0, 8)));
             }
 
             // Stripe MIT (off-session) charge
@@ -233,7 +233,7 @@ class OneClick_Purchase_Handler {
             );
 
             if (!$charge_result['success']) {
-                error_log(sprintf(
+                oneclick_log(sprintf(
                     'OneClick Purchase: Stripe charge failed for user #%d - %s',
                     $user_id,
                     $charge_result['error']
@@ -260,16 +260,16 @@ class OneClick_Purchase_Handler {
             }
 
             $payment_intent_id = $charge_result['payment_intent_id'];
-            error_log(sprintf('   ✅ Stripe platba úspešná. PaymentIntent: %s', $payment_intent_id));
+            oneclick_log(sprintf('   ✅ Stripe platba úspešná. PaymentIntent: %s', $payment_intent_id));
         }
         // COD, BACS, and test: no payment needed at this point
 
         // Step 4: Create WooCommerce order
-        error_log('');
-        error_log('📋 Step 28/29 | PLUGIN (vytvorenie WooCommerce objednávky)');
-        error_log('   Plugin volá OneClick_Order_Creator::create_order().');
-        error_log('   class-order-creator.php vytvorí objednávku cez wc_create_order(),');
-        error_log('   skopíruje adresy z poslednej objednávky, nastaví platbu a meta dáta.');
+        oneclick_log('');
+        oneclick_log('📋 Step 28/29 | PLUGIN (vytvorenie WooCommerce objednávky)');
+        oneclick_log('   Plugin volá OneClick_Order_Creator::create_order().');
+        oneclick_log('   class-order-creator.php vytvorí objednávku cez wc_create_order(),');
+        oneclick_log('   skopíruje adresy z poslednej objednávky, nastaví platbu a meta dáta.');
 
         $order_creator = new OneClick_Order_Creator();
         $order_id = $order_creator->create_order([
@@ -284,7 +284,7 @@ class OneClick_Purchase_Handler {
         ]);
 
         if (is_wp_error($order_id)) {
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 'OneClick Purchase: Order creation failed for user #%d - %s',
                 $user_id,
                 $order_id->get_error_message()
@@ -292,7 +292,7 @@ class OneClick_Purchase_Handler {
 
             // Auto-refund if Stripe charge was already processed
             if (!empty($payment_intent_id)) {
-                error_log(sprintf(
+                oneclick_log(sprintf(
                     'OneClick Purchase: Auto-refunding PI %s due to order creation failure',
                     $payment_intent_id
                 ));
@@ -323,7 +323,7 @@ class OneClick_Purchase_Handler {
 
         // Step 5: Token already marked as used in Step 2 (atomic claim_token)
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             'OneClick Purchase: ✅ SUCCESS - Order #%d created, user #%d, product #%d, amount: %s (code: %s)',
             $order_id,
             $user_id,
@@ -333,16 +333,16 @@ class OneClick_Purchase_Handler {
         ));
 
         // Step 6: Return success page (different per payment method)
-        error_log('');
-        error_log('🎉 Step 29/29 | PLUGIN → BROWSER (záverečná stránka)');
-        error_log(sprintf('   Plugin vracia HTML thank-you stránku pre objednávku #%d.', $order_id));
-        error_log(sprintf('   Zákazník vidí potvrdenie: produkt "%s", cena %s, platba %s.', $product->get_name(), wc_price($price), $payment_method));
-        error_log('   Browser zobrazuje stránku — celý flow je dokončený.');
-        error_log('');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('✅ FLOW DOKONČENÝ: Nákup → Pravidlá → Email → Klik → Platba/Checkout → Objednávka');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('');
+        oneclick_log('');
+        oneclick_log('🎉 Step 29/29 | PLUGIN → BROWSER (záverečná stránka)');
+        oneclick_log(sprintf('   Plugin vracia HTML thank-you stránku pre objednávku #%d.', $order_id));
+        oneclick_log(sprintf('   Zákazník vidí potvrdenie: produkt "%s", cena %s, platba %s.', $product->get_name(), wc_price($price), $payment_method));
+        oneclick_log('   Browser zobrazuje stránku — celý flow je dokončený.');
+        oneclick_log('');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('✅ FLOW DOKONČENÝ: Nákup → Pravidlá → Email → Klik → Platba/Checkout → Objednávka');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
 
         return $this->render_success_page($order_id, $product, $price, $payment_method);
     }
@@ -361,7 +361,7 @@ class OneClick_Purchase_Handler {
             $source_order = wc_get_order($original_order_id);
             if ($source_order && (int) $source_order->get_user_id() === (int) $user_id) {
                 $method = $this->normalize_payment_method($source_order->get_payment_method());
-                error_log(sprintf(
+                oneclick_log(sprintf(
                     'OneClick Purchase: Detected payment method "%s" from source order #%d for user #%d',
                     $method,
                     $source_order->get_id(),
@@ -380,14 +380,14 @@ class OneClick_Purchase_Handler {
         ]);
 
         if (empty($orders)) {
-            error_log(sprintf('OneClick Purchase: No previous orders for user #%d, defaulting to stripe', $user_id));
+            oneclick_log(sprintf('OneClick Purchase: No previous orders for user #%d, defaulting to stripe', $user_id));
             return 'stripe';
         }
 
         $last_order = $orders[0];
         $method = $this->normalize_payment_method($last_order->get_payment_method());
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             'OneClick Purchase: Detected payment method "%s" from order #%d for user #%d',
             $method,
             $last_order->get_id(),
@@ -404,7 +404,7 @@ class OneClick_Purchase_Handler {
             is_array($context) ? $context : $this->get_exchange_context()
         );
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '   Exchange context: visitor_key=%s... | current_user_id=%s | last_order_id=%s | last_payment_method=%s | has_saved_stripe=%s',
             substr($exchange_data['visitor_key'] ?? 'none', 0, 8),
             $exchange_data['current_user_id'] ?? 'anonymous',
@@ -412,7 +412,7 @@ class OneClick_Purchase_Handler {
             $exchange_data['last_payment_method'] ?? 'none',
             !empty($exchange_data['has_saved_stripe']) ? 'yes' : 'no'
         ));
-        error_log('   Tento kontext ide až v licencovanom outbound exchange requeste, nie v public shop URL.');
+        oneclick_log('   Tento kontext ide až v licencovanom outbound exchange requeste, nie v public shop URL.');
 
         return $api->post('/api/purchase/exchange-code', $exchange_data);
     }
@@ -422,21 +422,21 @@ class OneClick_Purchase_Handler {
         $access_token = $payload['access_token'] ?? '';
 
         if (empty($session_id) || empty($access_token)) {
-            error_log('OneClick Purchase Session: Missing session_id or access_token in exchange-code response');
+            oneclick_log('OneClick Purchase Session: Missing session_id or access_token in exchange-code response');
             return $this->render_error_page(
                 __('Invalid Session', 'woo-oneclick'),
                 __('Could not open your purchase session. Please click the email link again.', 'woo-oneclick')
             );
         }
 
-        error_log('🪟 SESSION FLOW | PLUGIN (otvorenie nákupného okna)');
-        error_log(sprintf(
+        oneclick_log('🪟 SESSION FLOW | PLUGIN (otvorenie nákupného okna)');
+        oneclick_log(sprintf(
             '   Backend vrátil flow=purchase_session | session_id=%s | remaining=%ss | items=%d',
             $session_id,
             $payload['remaining_seconds'] ?? 'n/a',
             count($payload['items'] ?? [])
         ));
-        error_log('   Plugin nespúšťa Stripe MIT ani nevytvára objednávku. Nastaví session cookie a presmeruje na session page.');
+        oneclick_log('   Plugin nespúšťa Stripe MIT ani nevytvára objednávku. Nastaví session cookie a presmeruje na session page.');
 
         OneClick_Purchase_Session::set_session_cookie($session_id, $access_token);
         wp_safe_redirect(add_query_arg('session_id', rawurlencode($session_id), rest_url('oneclick/v1/session')));
@@ -497,7 +497,7 @@ class OneClick_Purchase_Handler {
         }
 
         if (!empty($method)) {
-            error_log(sprintf('OneClick Purchase: Unknown payment method "%s", defaulting to stripe for legacy MIT compatibility', $method));
+            oneclick_log(sprintf('OneClick Purchase: Unknown payment method "%s", defaulting to stripe for legacy MIT compatibility', $method));
         }
         return 'stripe';
     }
@@ -548,17 +548,17 @@ class OneClick_Purchase_Handler {
 
         WC()->cart->calculate_totals();
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '   ✅ Product #%d pridaný do košíka ako cart_item=%s so zľavnenou cenou %s.',
             $product_id,
             $cart_item_key,
             wc_price($price)
         ));
-        error_log(sprintf('   Presmerovanie na checkout: %s', wc_get_checkout_url()));
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('✅ FLOW POKRAČUJE VO WOOCOMMERCE CHECKOUTE: Nákup → Pravidlá → Email → Klik → Košík → Checkout');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('');
+        oneclick_log(sprintf('   Presmerovanie na checkout: %s', wc_get_checkout_url()));
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('✅ FLOW POKRAČUJE VO WOOCOMMERCE CHECKOUTE: Nákup → Pravidlá → Email → Klik → Košík → Checkout');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
 
         wp_safe_redirect(wc_get_checkout_url());
         exit;

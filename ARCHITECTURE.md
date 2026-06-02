@@ -129,6 +129,7 @@ plugins_loaded
 
 Loaded classes include:
 
+- `OneClick_Logger`
 - `OneClick_API_Client`
 - `OneClick_Settings`
 - `OneClick_Actions_Admin`
@@ -178,6 +179,19 @@ Responsibilities:
 - returns decoded JSON or `WP_Error`.
 
 All protected backend calls go through this class.
+
+### `OneClick_Logger`
+
+Central production logger for plugin-side diagnostics.
+
+Responsibilities:
+
+- routes OneClick logs through WooCommerce `wc_get_logger()`,
+- writes to sources such as `oneclick-session`, `oneclick-email`, `oneclick-stripe`, `oneclick-backend`, `oneclick-public`, `oneclick-cart`, `oneclick-order`, `oneclick-ai` and `oneclick-core`,
+- preserves readable flow log text, including `FÁZA`, `Step x/29`, emoji markers and separators,
+- falls back to PHP `error_log()` only when WooCommerce logging is unavailable.
+
+Production operators should read plugin logs in `WooCommerce -> Status -> Logs`, filtered by the OneClick source.
 
 ### `OneClick_Campaign_Trigger`
 
@@ -446,6 +460,7 @@ Important backend endpoints:
 | Plugin area | Endpoint |
 |-------------|----------|
 | Rules evaluation | `POST /api/rules/evaluate` |
+| Compatibility email delivery test | `POST /api/email/test-delivery` |
 | Campaign email | `POST /api/send-campaign-email` |
 | Opaque code exchange | `POST /api/purchase/exchange-code` |
 | Public link CRUD | `GET/POST/PUT/DELETE /api/public-links` |
@@ -533,7 +548,7 @@ One-Click Purchase
 ├── Branding
 ├── AI Setup
 ├── Compatibility
-└── JWT Test
+└── Backend Token Diagnostics
 ```
 
 ### Settings

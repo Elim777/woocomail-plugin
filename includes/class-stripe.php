@@ -24,13 +24,13 @@ class OneClick_Stripe {
      */
     private function get_stripe_secret_key() {
         if ((int) get_option('oneclick_use_woocommerce_stripe_keys', 0) !== 1) {
-            error_log('OneClick Stripe: WooCommerce Stripe key usage not allowed in OneClick settings');
+            oneclick_log('OneClick Stripe: WooCommerce Stripe key usage not allowed in OneClick settings');
             return false;
         }
 
         $stripe_settings = get_option('woocommerce_stripe_settings', []);
         if (empty($stripe_settings['enabled']) || $stripe_settings['enabled'] !== 'yes') {
-            error_log('OneClick Stripe: WooCommerce Stripe Gateway is not enabled');
+            oneclick_log('OneClick Stripe: WooCommerce Stripe Gateway is not enabled');
             return false;
         }
 
@@ -40,7 +40,7 @@ class OneClick_Stripe {
             : ($stripe_settings['secret_key'] ?? '');
 
         if (empty($secret_key)) {
-            error_log('OneClick Stripe: WooCommerce Stripe secret key is not configured');
+            oneclick_log('OneClick Stripe: WooCommerce Stripe secret key is not configured');
             return false;
         }
 
@@ -61,7 +61,7 @@ class OneClick_Stripe {
         $customer_id = $this->get_customer_id($user_id);
 
         if (empty($customer_id)) {
-            error_log("OneClick Stripe: User #$user_id has no Stripe customer ID");
+            oneclick_log("OneClick Stripe: User #$user_id has no Stripe customer ID");
             return false;
         }
 
@@ -81,7 +81,7 @@ class OneClick_Stripe {
             foreach ($tokens as $token) {
                 $pm = $token->get_token();
                 if (!empty($pm)) {
-                    error_log(sprintf('OneClick Stripe: Found PM %s via WC Payment Token for user #%d', $pm, $user_id));
+                    oneclick_log(sprintf('OneClick Stripe: Found PM %s via WC Payment Token for user #%d', $pm, $user_id));
                     // Save to user meta for faster lookup next time
                     update_user_meta($user_id, '_stripe_default_payment_method', $pm);
                     return $pm;
@@ -90,18 +90,18 @@ class OneClick_Stripe {
         }
 
         // 3. Fallback: Query Stripe API directly
-        error_log(sprintf('OneClick Stripe: No PM in user meta or WC tokens for user #%d, querying Stripe API', $user_id));
+        oneclick_log(sprintf('OneClick Stripe: No PM in user meta or WC tokens for user #%d, querying Stripe API', $user_id));
         $reconciliation = new OneClick_Stripe_Reconciliation();
         $pm_from_stripe = $reconciliation->get_customer_payment_methods($customer_id);
 
         if ($pm_from_stripe) {
             // Save for future use
             update_user_meta($user_id, '_stripe_default_payment_method', $pm_from_stripe);
-            error_log(sprintf('OneClick Stripe: Found PM %s via Stripe API for user #%d, saved to meta', $pm_from_stripe, $user_id));
+            oneclick_log(sprintf('OneClick Stripe: Found PM %s via Stripe API for user #%d, saved to meta', $pm_from_stripe, $user_id));
             return $pm_from_stripe;
         }
 
-        error_log("OneClick Stripe: User #$user_id has no payment method anywhere (meta, WC tokens, Stripe API)");
+        oneclick_log("OneClick Stripe: User #$user_id has no payment method anywhere (meta, WC tokens, Stripe API)");
         return false;
     }
 
@@ -170,7 +170,7 @@ class OneClick_Stripe {
             ]);
 
             if (is_wp_error($response)) {
-                error_log('OneClick Stripe: API error: ' . $response->get_error_message());
+                oneclick_log('OneClick Stripe: API error: ' . $response->get_error_message());
                 return [
                     'success' => false,
                     'error' => 'Stripe API connection failed'
@@ -186,7 +186,7 @@ class OneClick_Stripe {
                 $status = $data['status'] ?? '';
 
                 if ($status === 'succeeded') {
-                    error_log(sprintf(
+                    oneclick_log(sprintf(
                         'OneClick Stripe: ✅ Payment succeeded for user #%d, amount: %s %s (PI: %s)',
                         $user_id,
                         $amount,
@@ -203,7 +203,7 @@ class OneClick_Stripe {
 
                 // Handle authentication required (3DS)
                 if ($status === 'requires_action' || $status === 'requires_source_action') {
-                    error_log(sprintf(
+                    oneclick_log(sprintf(
                         'OneClick Stripe: ⚠️ Authentication required for user #%d (PI: %s)',
                         $user_id,
                         $data['id']
@@ -219,7 +219,7 @@ class OneClick_Stripe {
                 }
 
                 // Other status
-                error_log(sprintf(
+                oneclick_log(sprintf(
                     'OneClick Stripe: Payment status "%s" for user #%d (PI: %s)',
                     $status,
                     $user_id,
@@ -242,7 +242,7 @@ class OneClick_Stripe {
                 $error_message = $data['message'];
             }
 
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 'OneClick Stripe: ❌ Payment failed for user #%d: %s',
                 $user_id,
                 $error_message
@@ -255,7 +255,7 @@ class OneClick_Stripe {
             ];
 
         } catch (Exception $e) {
-            error_log('OneClick Stripe Exception: ' . $e->getMessage());
+            oneclick_log('OneClick Stripe Exception: ' . $e->getMessage());
             return [
                 'success' => false,
                 'error' => 'Internal error: ' . $e->getMessage()
@@ -299,13 +299,13 @@ If you did not attempt this purchase, please ignore this email.', 'woo-oneclick'
         $sent = wp_mail($user_email, $subject, $message);
 
         if ($sent) {
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 'OneClick Stripe: 3DS authentication email sent to %s (PI: %s)',
                 $user_email,
                 $payment_intent_id
             ));
         } else {
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 'OneClick Stripe: Failed to send 3DS email to %s (PI: %s)',
                 $user_email,
                 $payment_intent_id
@@ -379,7 +379,7 @@ If you did not attempt this purchase, please ignore this email.', 'woo-oneclick'
             ]);
 
             if (is_wp_error($response)) {
-                error_log('OneClick Stripe Refund: API error: ' . $response->get_error_message());
+                oneclick_log('OneClick Stripe Refund: API error: ' . $response->get_error_message());
                 return ['success' => false, 'error' => $response->get_error_message()];
             }
 
@@ -387,7 +387,7 @@ If you did not attempt this purchase, please ignore this email.', 'woo-oneclick'
             $status_code = wp_remote_retrieve_response_code($response);
 
             if ($status_code === 200 && isset($data['id'])) {
-                error_log(sprintf(
+                oneclick_log(sprintf(
                     'OneClick Stripe: Refund created for PI %s (Refund: %s)',
                     $payment_intent_id,
                     $data['id']
@@ -396,11 +396,11 @@ If you did not attempt this purchase, please ignore this email.', 'woo-oneclick'
             }
 
             $error = $data['error']['message'] ?? 'Unknown refund error';
-            error_log(sprintf('OneClick Stripe Refund failed for PI %s: %s', $payment_intent_id, $error));
+            oneclick_log(sprintf('OneClick Stripe Refund failed for PI %s: %s', $payment_intent_id, $error));
             return ['success' => false, 'error' => $error];
 
         } catch (Exception $e) {
-            error_log('OneClick Stripe Refund Exception: ' . $e->getMessage());
+            oneclick_log('OneClick Stripe Refund Exception: ' . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }

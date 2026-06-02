@@ -44,22 +44,22 @@ class OneClick_Campaign_Trigger {
      * @param int $order_id WooCommerce order ID
      */
     public function trigger_campaigns($order_id) {
-        error_log('');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('🛒 FÁZA 1: NÁKUP NA ESHOPE → VYHODNOTENIE PRAVIDIEL');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('');
-        error_log('📌 Step 1/29 | ESHOP → PLUGIN');
-        error_log(sprintf('   Zákazník zaplatil objednávku #%d na eshope.', $order_id));
-        error_log(sprintf('   WooCommerce zavolal do_action("%s", %d).', current_filter(), $order_id));
-        error_log('   Plugin má zaregistrovaný add_action() callback na tento hook');
-        error_log('   (class-campaign-trigger.php:29), čím sa spustila táto funkcia trigger_campaigns().');
-        error_log('');
+        oneclick_log('');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('🛒 FÁZA 1: NÁKUP NA ESHOPE → VYHODNOTENIE PRAVIDIEL');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
+        oneclick_log('📌 Step 1/29 | ESHOP → PLUGIN');
+        oneclick_log(sprintf('   Zákazník zaplatil objednávku #%d na eshope.', $order_id));
+        oneclick_log(sprintf('   WooCommerce zavolal do_action("%s", %d).', current_filter(), $order_id));
+        oneclick_log('   Plugin má zaregistrovaný add_action() callback na tento hook');
+        oneclick_log('   (class-campaign-trigger.php:29), čím sa spustila táto funkcia trigger_campaigns().');
+        oneclick_log('');
 
         $order = wc_get_order($order_id);
         if (!$order) {
-            error_log(sprintf('   ❌ Objednávka #%d neexistuje. Flow končí.', $order_id));
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log(sprintf('   ❌ Objednávka #%d neexistuje. Flow končí.', $order_id));
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             return;
         }
 
@@ -67,14 +67,14 @@ class OneClick_Campaign_Trigger {
         $order_currency = $order->get_currency();
 
         if (!$user_id) {
-            error_log(sprintf('   ⚠️ Objednávka #%d nemá user_id (guest checkout). Flow končí.', $order_id));
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log(sprintf('   ⚠️ Objednávka #%d nemá user_id (guest checkout). Flow končí.', $order_id));
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             return;
         }
 
         if ($order->get_meta('_oneclick_campaigns_handled') === 'yes') {
-            error_log(sprintf('   ⏭️ Objednávka #%d už bola spracovaná OneClick campaign triggerom. Preskakujem duplicitu.', $order_id));
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log(sprintf('   ⏭️ Objednávka #%d už bola spracovaná OneClick campaign triggerom. Preskakujem duplicitu.', $order_id));
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             return;
         }
 
@@ -82,10 +82,10 @@ class OneClick_Campaign_Trigger {
         $purchase_link_mode = get_option('oneclick_purchase_link_mode', 'all_with_cart_fallback');
         $click_behavior = $this->is_card_payment_method($source_payment_method) ? 'mit_purchase' : 'cart_checkout';
 
-        error_log('📦 Step 2/29 | PLUGIN (čítanie dát z objednávky)');
-        error_log('   Plugin iteruje cez $order->get_items() a pre každú položku volá');
-        error_log('   wc_get_product($product_id) aby získal kategórie cez $product->get_category_ids().');
-        error_log(sprintf(
+        oneclick_log('📦 Step 2/29 | PLUGIN (čítanie dát z objednávky)');
+        oneclick_log('   Plugin iteruje cez $order->get_items() a pre každú položku volá');
+        oneclick_log('   wc_get_product($product_id) aby získal kategórie cez $product->get_category_ids().');
+        oneclick_log(sprintf(
             '   Objednávka #%d: user_id=%d, status=%s, total=%s %s, payment_method=%s',
             $order_id,
             $user_id,
@@ -94,16 +94,16 @@ class OneClick_Campaign_Trigger {
             $order_currency,
             $source_payment_method
         ));
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '   Purchase link mode=%s → click_behavior=%s',
             $purchase_link_mode,
             $click_behavior
         ));
 
         if ($purchase_link_mode === 'card_only' && !$this->is_card_payment_method($source_payment_method)) {
-            error_log('   ⚠️ Nastavenie Card only: zdrojová objednávka nie je Stripe/card. Email/action sa neposiela.');
+            oneclick_log('   ⚠️ Nastavenie Card only: zdrojová objednávka nie je Stripe/card. Email/action sa neposiela.');
             $this->mark_order_handled($order, 'card_only_non_card_skip');
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             return;
         }
 
@@ -118,7 +118,7 @@ class OneClick_Campaign_Trigger {
             if ($product) {
                 $cat_ids = $product->get_category_ids();
                 $category_ids = array_merge($category_ids, $cat_ids);
-                error_log(sprintf(
+                oneclick_log(sprintf(
                     '   📎 Položka: product_id=%d, "%s", cena=%s, kategórie=[%s]',
                     $product_id,
                     $product->get_name(),
@@ -132,18 +132,18 @@ class OneClick_Campaign_Trigger {
         $category_ids = array_unique(array_map('intval', $category_ids));
 
         if (empty($product_ids)) {
-            error_log(sprintf('   ⚠️ Objednávka #%d nemá položky. Flow končí.', $order_id));
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log(sprintf('   ⚠️ Objednávka #%d nemá položky. Flow končí.', $order_id));
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             return;
         }
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '   Zozbierané: product_ids=[%s], category_ids=[%s]',
             implode(',', $product_ids),
             implode(',', $category_ids)
         ));
-        error_log('   Tieto ID sa pošlú na backend, kde sa porovnajú s uloženými pravidlami (rules).');
-        error_log('');
+        oneclick_log('   Tieto ID sa pošlú na backend, kde sa porovnajú s uloženými pravidlami (rules).');
+        oneclick_log('');
 
         // Call backend to evaluate rules
         $request_data = [
@@ -155,45 +155,45 @@ class OneClick_Campaign_Trigger {
             'order_id'     => $order_id,
         ];
 
-        error_log('📤 Step 3/29 | PLUGIN → BACKEND (HTTP request)');
-        error_log('   Plugin volá OneClick_API_Client::instance()->post("/api/rules/evaluate", $data).');
-        error_log('   class-api-client.php::post() zavolá wp_remote_post() s JSON body.');
-        error_log('   Do hlavičiek pridá X-License-Key (z get_option("oneclick_license_key"))');
-        error_log('   a X-Site-URL (z site_url()). TLS šifruje celé spojenie.');
-        error_log('   Payload: ' . wp_json_encode($request_data));
-        error_log('');
-        error_log('   ══ Backend teraz vykonáva Steps 4-6 (viď Render logy) ══');
-        error_log('');
+        oneclick_log('📤 Step 3/29 | PLUGIN → BACKEND (HTTP request)');
+        oneclick_log('   Plugin volá OneClick_API_Client::instance()->post("/api/rules/evaluate", $data).');
+        oneclick_log('   class-api-client.php::post() zavolá wp_remote_post() s JSON body.');
+        oneclick_log('   Do hlavičiek pridá X-License-Key (z get_option("oneclick_license_key"))');
+        oneclick_log('   a X-Site-URL (z site_url()). TLS šifruje celé spojenie.');
+        oneclick_log('   Payload: ' . wp_json_encode($request_data));
+        oneclick_log('');
+        oneclick_log('   ══ Backend teraz vykonáva Steps 4-6 (viď Render logy) ══');
+        oneclick_log('');
 
         $api = OneClick_API_Client::instance();
         $result = $api->post('/api/rules/evaluate', $request_data);
 
         if (is_wp_error($result)) {
-            error_log('📥 Step 7/29 | BACKEND → PLUGIN (odpoveď)');
-            error_log('   ❌ Backend rule evaluation zlyhalo: ' . $result->get_error_message());
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log('📥 Step 7/29 | BACKEND → PLUGIN (odpoveď)');
+            oneclick_log('   ❌ Backend rule evaluation zlyhalo: ' . $result->get_error_message());
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             return;
         }
 
         $matched_rules = $result['matched_rules'] ?? 0;
         $reactions = $result['reactions'] ?? [];
 
-        error_log('📥 Step 7/29 | BACKEND → PLUGIN (odpoveď)');
-        error_log('   wp_remote_post() vrátilo HTTP 200. Plugin dekódoval JSON odpoveď');
-        error_log('   cez json_decode() v class-api-client.php::handle_response().');
-        error_log(sprintf(
+        oneclick_log('📥 Step 7/29 | BACKEND → PLUGIN (odpoveď)');
+        oneclick_log('   wp_remote_post() vrátilo HTTP 200. Plugin dekódoval JSON odpoveď');
+        oneclick_log('   cez json_decode() v class-api-client.php::handle_response().');
+        oneclick_log(sprintf(
             '   Výsledok: matched_rules=%d, počet reakcií=%d',
             $matched_rules,
             count($reactions)
         ));
 
         if (empty($reactions)) {
-            error_log('   Pre tieto produkty neexistuje žiadne aktívne pravidlo. Flow končí.');
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log('   Pre tieto produkty neexistuje žiadne aktívne pravidlo. Flow končí.');
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             return;
         }
 
-        error_log('   Backend matchol pravidlá a vrátil reakcie. Plugin ich teraz naplánuje do WP-Cron.');
+        oneclick_log('   Backend matchol pravidlá a vrátil reakcie. Plugin ich teraz naplánuje do WP-Cron.');
 
         // Schedule each reaction via WP-Cron
         $scheduled_count = 0;
@@ -223,14 +223,14 @@ class OneClick_Campaign_Trigger {
                 $scheduled_count++;
             }
 
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 '   ⏰ Reakcia #%d: "%s" | delay=%d min | wp_schedule_single_event()=%s',
                 $index + 1,
                 $reaction['reaction_name'] ?? 'unknown',
                 $delay_minutes,
                 $scheduled === false ? '❌ FAILED' : '✅ OK'
             ));
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 '      Ponúkané produkty: [%s] | Zľava: %s%%',
                 implode(', ', $reaction['offer_products'] ?? []),
                 $reaction['discount_percent'] ?? 0
@@ -240,17 +240,17 @@ class OneClick_Campaign_Trigger {
         if ($scheduled_count > 0 && $failed_count === 0) {
             $this->mark_order_handled($order, 'campaigns_scheduled');
         } elseif ($failed_count > 0) {
-            error_log(sprintf('   ⚠️ Niektoré reakcie sa nepodarilo naplánovať (%d failed). Order meta guard sa nenastaví.', $failed_count));
+            oneclick_log(sprintf('   ⚠️ Niektoré reakcie sa nepodarilo naplánovať (%d failed). Order meta guard sa nenastaví.', $failed_count));
         }
 
-        error_log('');
-        error_log('   wp_schedule_single_event() uložilo cron záznam do wp_options("cron").');
-        error_log('   WordPress spustí callback pri najbližšom HTTP requeste po uplynutí delay.');
-        error_log('   ⚠️ WP-Cron nie je skutočný cron — závisí od návštev stránky.');
-        error_log('');
-        error_log('   ⏳ Čakám na WP-Cron... (pokračovanie vo Fáze 2)');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('');
+        oneclick_log('');
+        oneclick_log('   wp_schedule_single_event() uložilo cron záznam do wp_options("cron").');
+        oneclick_log('   WordPress spustí callback pri najbližšom HTTP requeste po uplynutí delay.');
+        oneclick_log('   ⚠️ WP-Cron nie je skutočný cron — závisí od návštev stránky.');
+        oneclick_log('');
+        oneclick_log('   ⏳ Čakám na WP-Cron... (pokračovanie vo Fáze 2)');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
     }
 
     /**
@@ -263,17 +263,17 @@ class OneClick_Campaign_Trigger {
      * @param array $payload  Reaction data + order context
      */
     public function send_campaign_email($order_id, $payload) {
-        error_log('');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('📧 FÁZA 2: WP-CRON FIRES → ODOSLANIE CAMPAIGN EMAILU');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('');
-        error_log('⏰ Step 8/29 | WP-CRON → PLUGIN');
-        error_log('   WordPress spracoval HTTP request od návštevníka a skontroloval wp_options(\'cron\').');
-        error_log('   Naplánovaný čas uplynul → WordPress zavolal do_action(\'oneclick_send_campaign_email\',');
-        error_log(sprintf('   $order_id=%d, $payload). Tento callback je zaregistrovaný', $order_id));
-        error_log('   v __construct() tejto triedy (class-campaign-trigger.php:32).');
-        error_log('');
+        oneclick_log('');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('📧 FÁZA 2: WP-CRON FIRES → ODOSLANIE CAMPAIGN EMAILU');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
+        oneclick_log('⏰ Step 8/29 | WP-CRON → PLUGIN');
+        oneclick_log('   WordPress spracoval HTTP request od návštevníka a skontroloval wp_options(\'cron\').');
+        oneclick_log('   Naplánovaný čas uplynul → WordPress zavolal do_action(\'oneclick_send_campaign_email\',');
+        oneclick_log(sprintf('   $order_id=%d, $payload). Tento callback je zaregistrovaný', $order_id));
+        oneclick_log('   v __construct() tejto triedy (class-campaign-trigger.php:32).');
+        oneclick_log('');
 
         $reaction = $payload['reaction'] ?? [];
         $user_id = $payload['user_id'] ?? 0;
@@ -287,8 +287,8 @@ class OneClick_Campaign_Trigger {
         // Get user data
         $user = get_user_by('id', $user_id);
         if (!$user) {
-            error_log(sprintf('   ❌ User #%d neexistuje. Flow končí.', $user_id));
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log(sprintf('   ❌ User #%d neexistuje. Flow končí.', $user_id));
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             return;
         }
 
@@ -297,9 +297,9 @@ class OneClick_Campaign_Trigger {
         $offer_product_ids = $reaction['offer_products'] ?? [];
 
         if (empty($offer_product_ids)) {
-            error_log('   ❌ Reakcia nemá žiadne offer_products. Flow končí.');
-            error_log('   Dostupné reaction keys: ' . implode(', ', array_keys($reaction)));
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log('   ❌ Reakcia nemá žiadne offer_products. Flow končí.');
+            oneclick_log('   Dostupné reaction keys: ' . implode(', ', array_keys($reaction)));
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             return;
         }
 
@@ -307,22 +307,22 @@ class OneClick_Campaign_Trigger {
         $discount      = floatval($reaction['discount_percent'] ?? 0);
         $discount_type = $reaction['discount_type'] ?? 'none';
 
-        error_log('🔧 Step 9/29 | PLUGIN (príprava dát pre backend)');
-        error_log('   Plugin zostavuje kontext pre backend: načítava produkty cez wc_get_product(),');
-        error_log('   počíta zľavnené ceny, pripravuje pole offer_products[].');
-        error_log(sprintf(
+        oneclick_log('🔧 Step 9/29 | PLUGIN (príprava dát pre backend)');
+        oneclick_log('   Plugin zostavuje kontext pre backend: načítava produkty cez wc_get_product(),');
+        oneclick_log('   počíta zľavnené ceny, pripravuje pole offer_products[].');
+        oneclick_log(sprintf(
             '   Zákazník: user_id=%d, email=%s, display_name=%s',
             $user_id,
             $user->user_email,
             $user->display_name
         ));
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '   Zľava: %s%% (%s) | Počet ponúkaných produktov: %d',
             $discount,
             $discount_type,
             count($offer_product_ids)
         ));
-        error_log(sprintf(
+        oneclick_log(sprintf(
             '   Zdrojová platba=%s | click_behavior=%s | completion_mode=%s',
             $source_payment_method,
             $click_behavior,
@@ -334,7 +334,7 @@ class OneClick_Campaign_Trigger {
         foreach ($offer_product_ids as $pid) {
             $product = wc_get_product($pid);
             if (!$product) {
-                error_log(sprintf('   ⚠️ Product #%d sa nepodarilo načítať, preskakujem.', $pid));
+                oneclick_log(sprintf('   ⚠️ Product #%d sa nepodarilo načítať, preskakujem.', $pid));
                 continue;
             }
 
@@ -364,7 +364,7 @@ class OneClick_Campaign_Trigger {
                 $offer_product['image_url'] = esc_url_raw($image_url);
             }
 
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 '   📎 Product #%d: "%s" | pôvodná=%.2f | po zľave=%.2f %s | obrázok=%s',
                 $pid,
                 $product->get_name(),
@@ -378,19 +378,19 @@ class OneClick_Campaign_Trigger {
         }
 
         if (empty($offer_products)) {
-            error_log(sprintf('   ❌ Žiadne validné produkty na odoslanie pre objednávku #%d. Flow končí.', $order_id));
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log(sprintf('   ❌ Žiadne validné produkty na odoslanie pre objednávku #%d. Flow končí.', $order_id));
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             return;
         }
 
-        error_log('');
-        error_log('📤 Step 10/29 | PLUGIN → BACKEND (HTTP request)');
-        error_log('   Plugin volá OneClick_API_Client::instance()->post("/api/send-campaign-email", $data).');
-        error_log('   Toto je JEDEN HTTP request. Backend z neho interně:');
-        error_log('   — vygeneruje JWT tokeny (generate_purchase_token() pre každý produkt)');
-        error_log('   — vytvorí purchase linky (create_purchase_link() → short_id v DB)');
-        error_log('   — odošle email cez SendGrid API');
-        error_log(sprintf(
+        oneclick_log('');
+        oneclick_log('📤 Step 10/29 | PLUGIN → BACKEND (HTTP request)');
+        oneclick_log('   Plugin volá OneClick_API_Client::instance()->post("/api/send-campaign-email", $data).');
+        oneclick_log('   Toto je JEDEN HTTP request. Backend z neho interně:');
+        oneclick_log('   — vygeneruje JWT tokeny (generate_purchase_token() pre každý produkt)');
+        oneclick_log('   — vytvorí purchase linky (create_purchase_link() → short_id v DB)');
+        oneclick_log('   — odošle email cez SendGrid API');
+        oneclick_log(sprintf(
             '   Príjemca: %s | Produktov: %d | Objednávka: #%d | click_behavior=%s | completion_mode=%s',
             $user->user_email,
             count($offer_products),
@@ -398,9 +398,9 @@ class OneClick_Campaign_Trigger {
             $click_behavior,
             $completion_mode
         ));
-        error_log('');
-        error_log('   ══ Backend teraz vykonáva Steps 11-14 (viď Render logy) ══');
-        error_log('');
+        oneclick_log('');
+        oneclick_log('   ══ Backend teraz vykonáva Steps 11-14 (viď Render logy) ══');
+        oneclick_log('');
 
         $api    = OneClick_API_Client::instance();
         $result = $api->post('/api/send-campaign-email', [
@@ -417,8 +417,8 @@ class OneClick_Campaign_Trigger {
         ]);
 
         if (is_wp_error($result)) {
-            error_log(sprintf('   ❌ Backend email sending zlyhalo pre order #%d: %s', $order_id, $result->get_error_message()));
-            error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            oneclick_log(sprintf('   ❌ Backend email sending zlyhalo pre order #%d: %s', $order_id, $result->get_error_message()));
+            oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             return;
         }
 
@@ -426,13 +426,13 @@ class OneClick_Campaign_Trigger {
         $first_purchase_id = $result['purchase_ids'][0] ?? ($result['purchase_id'] ?? '');
         $backend_url = rtrim(get_option('oneclick_backend_url', 'https://woocomail-api.onrender.com'), '/');
         $first_link = $first_purchase_id ? $backend_url . '/click?id=' . $first_purchase_id : 'n/a';
-        error_log('   ✅ Backend potvrdil odoslanie emailu.');
-        error_log(sprintf('   purchase_ids: [%s] — tieto krátke ID sú v emailových linkoch', $ids ?: 'n/a'));
-        error_log(sprintf('   Link v emaili vyzerá: %s', $first_link));
-        error_log('');
-        error_log('   📬 Email doručený zákazníkovi. Čakám na klik... (pokračovanie vo Fáze 3)');
-        error_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        error_log('');
+        oneclick_log('   ✅ Backend potvrdil odoslanie emailu.');
+        oneclick_log(sprintf('   purchase_ids: [%s] — tieto krátke ID sú v emailových linkoch', $ids ?: 'n/a'));
+        oneclick_log(sprintf('   Link v emaili vyzerá: %s', $first_link));
+        oneclick_log('');
+        oneclick_log('   📬 Email doručený zákazníkovi. Čakám na klik... (pokračovanie vo Fáze 3)');
+        oneclick_log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        oneclick_log('');
     }
 
     private function normalize_payment_method($method) {
@@ -467,7 +467,7 @@ class OneClick_Campaign_Trigger {
             && class_exists('OneClick_Settings')
             && !OneClick_Settings::immediate_purchase_enabled()
         ) {
-            error_log('OneClick Campaign: immediate_purchase requested but disabled; using purchase_session.');
+            oneclick_log('OneClick Campaign: immediate_purchase requested but disabled; using purchase_session.');
             return 'purchase_session';
         }
 

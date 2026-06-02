@@ -2,8 +2,8 @@
 /**
  * Compatibility Test
  *
- * Admin page that checks system requirements, backend connectivity,
- * Stripe configuration, and allows sending test emails / mock purchases.
+ * Production-oriented diagnostics for the current backend-centric OneClick
+ * architecture.
  *
  * @package WooOneClick
  * @since 1.1.0
@@ -21,9 +21,6 @@ class OneClick_Compatibility_Test {
         add_action('wp_ajax_oneclick_test_email', [$this, 'ajax_test_email']);
     }
 
-    /**
-     * Add admin menu page
-     */
     public function add_menu_page() {
         add_submenu_page(
             'oneclick-settings',
@@ -35,18 +32,14 @@ class OneClick_Compatibility_Test {
         );
     }
 
-    /**
-     * Render compatibility test page
-     */
     public function render_page() {
         $nonce = wp_create_nonce('oneclick_compat_nonce');
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('Compatibility Test', 'woo-oneclick'); ?></h1>
-            <p class="description"><?php esc_html_e('Check that your environment meets all requirements for OneClick Purchase.', 'woo-oneclick'); ?></p>
+            <p class="description"><?php esc_html_e('Checks the live WordPress, WooCommerce, backend, license, worker and email-delivery requirements used by the current OneClick architecture.', 'woo-oneclick'); ?></p>
 
-            <!-- System Checks -->
-            <div class="card" style="max-width: 800px; margin-top: 20px;">
+            <div class="card" style="max-width: 900px; margin-top: 20px;">
                 <h2><?php esc_html_e('System Requirements', 'woo-oneclick'); ?></h2>
                 <table class="widefat striped" id="oneclick-compat-table">
                     <thead>
@@ -68,10 +61,9 @@ class OneClick_Compatibility_Test {
                 </p>
             </div>
 
-            <!-- Test Email -->
-            <div class="card" style="max-width: 800px; margin-top: 20px;">
-                <h2><?php esc_html_e('Test Email', 'woo-oneclick'); ?></h2>
-                <p class="description"><?php esc_html_e('Send a test email through the backend to verify email delivery.', 'woo-oneclick'); ?></p>
+            <div class="card" style="max-width: 900px; margin-top: 20px;">
+                <h2><?php esc_html_e('Test Email Delivery', 'woo-oneclick'); ?></h2>
+                <p class="description"><?php esc_html_e('Sends a diagnostic email through the licensed backend and tenant SendGrid routing. It does not create a purchase link, offer, session, claim or order.', 'woo-oneclick'); ?></p>
                 <p>
                     <label>
                         <?php esc_html_e('Email:', 'woo-oneclick'); ?>
@@ -85,43 +77,49 @@ class OneClick_Compatibility_Test {
                     <span id="oneclick-test-email-status" style="margin-left: 10px;"></span>
                 </p>
             </div>
-
         </div>
 
         <script>
         jQuery(function($) {
-            // Run checks
             $('#oneclick-run-checks').on('click', function() {
                 var $btn = $(this);
-                $btn.prop('disabled', true).text('<?php esc_html_e('Running...', 'woo-oneclick'); ?>');
+                $btn.prop('disabled', true).text('<?php echo esc_js(__('Running...', 'woo-oneclick')); ?>');
 
                 $.post(ajaxurl, {
                     action: 'oneclick_compat_check',
                     nonce: $btn.data('nonce')
-                }, function(response) {
-                    $btn.prop('disabled', false).text('<?php esc_html_e('Run Checks', 'woo-oneclick'); ?>');
+                }).done(function(response) {
                     if (response.success) {
-                        renderChecks(response.data.checks);
+                        renderChecks(response.data.checks || []);
+                    } else {
+                        renderError(response.data && response.data.message ? response.data.message : '<?php echo esc_js(__('Checks failed.', 'woo-oneclick')); ?>');
                     }
+                }).fail(function(xhr) {
+                    renderError(xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ? xhr.responseJSON.data.message : '<?php echo esc_js(__('Request failed. Check WooCommerce logs source oneclick-core.', 'woo-oneclick')); ?>');
+                }).always(function() {
+                    $btn.prop('disabled', false).text('<?php echo esc_js(__('Run Checks', 'woo-oneclick')); ?>');
                 });
             });
 
-            // Test email
             $('#oneclick-test-email-btn').on('click', function() {
                 var $btn = $(this);
                 var email = $('#oneclick-test-email-input').val();
                 $btn.prop('disabled', true);
-                $('#oneclick-test-email-status').text('<?php esc_html_e('Sending...', 'woo-oneclick'); ?>');
+                $('#oneclick-test-email-status').text('<?php echo esc_js(__('Sending...', 'woo-oneclick')); ?>');
 
                 $.post(ajaxurl, {
                     action: 'oneclick_test_email',
                     nonce: $btn.data('nonce'),
                     email: email
-                }, function(response) {
-                    $btn.prop('disabled', false);
-                    var status = response.success ? '<?php esc_html_e('Sent!', 'woo-oneclick'); ?>' : (response.data.message || '<?php esc_html_e('Failed', 'woo-oneclick'); ?>');
+                }).done(function(response) {
+                    var status = response.success ? (response.data.message || '<?php echo esc_js(__('Sent!', 'woo-oneclick')); ?>') : (response.data && response.data.message ? response.data.message : '<?php echo esc_js(__('Failed', 'woo-oneclick')); ?>');
                     var color = response.success ? '#00a32a' : '#d63638';
-                    $('#oneclick-test-email-status').html('<span style="color:' + color + ';">' + status + '</span>');
+                    $('#oneclick-test-email-status').html('<span style="color:' + color + ';">' + escapeHtml(status) + '</span>');
+                }).fail(function(xhr) {
+                    var message = xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ? xhr.responseJSON.data.message : '<?php echo esc_js(__('Request failed. Check WooCommerce logs source oneclick-core.', 'woo-oneclick')); ?>';
+                    $('#oneclick-test-email-status').html('<span style="color:#d63638;">' + escapeHtml(message) + '</span>');
+                }).always(function() {
+                    $btn.prop('disabled', false);
                 });
             });
 
@@ -132,20 +130,25 @@ class OneClick_Compatibility_Test {
                     $tbody.append(
                         '<tr>' +
                         '<td style="text-align:center;">' + icon + '</td>' +
-                        '<td><strong>' + check.name + '</strong></td>' +
-                        '<td>' + check.detail + '</td>' +
+                        '<td><strong>' + escapeHtml(check.name) + '</strong></td>' +
+                        '<td>' + escapeHtml(check.detail) + '</td>' +
                         '</tr>'
                     );
                 });
+            }
+
+            function renderError(message) {
+                $('#oneclick-compat-table tbody').html('<tr><td colspan="3"><span style="color:#d63638;">' + escapeHtml(message) + '</span></td></tr>');
+            }
+
+            function escapeHtml(value) {
+                return $('<div>').text(value || '').html();
             }
         });
         </script>
         <?php
     }
 
-    /**
-     * AJAX: Run compatibility checks
-     */
     public function ajax_run_checks() {
         check_ajax_referer('oneclick_compat_nonce', 'nonce');
 
@@ -155,14 +158,12 @@ class OneClick_Compatibility_Test {
 
         $checks = [];
 
-        // PHP Version
         $checks[] = [
             'name'   => 'PHP Version',
             'pass'   => version_compare(PHP_VERSION, '8.1', '>='),
             'detail' => sprintf('Current: PHP %s (requires >= 8.1)', PHP_VERSION),
         ];
 
-        // WooCommerce
         $wc_active = class_exists('WooCommerce');
         $wc_version = $wc_active ? WC()->version : 'Not installed';
         $checks[] = [
@@ -171,39 +172,65 @@ class OneClick_Compatibility_Test {
             'detail' => sprintf('Version: %s (requires >= 7.5)', $wc_version),
         ];
 
-        // HPOS (Custom Order Tables)
         $hpos_enabled = false;
         if (class_exists(\Automattic\WooCommerce\Utilities\OrderUtil::class)) {
             $hpos_enabled = \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
         }
         $checks[] = [
             'name'   => 'HPOS (Custom Order Tables)',
-            'pass'   => true, // Works with both HPOS and legacy
+            'pass'   => true,
             'detail' => $hpos_enabled ? 'Enabled (plugin is compatible)' : 'Disabled (plugin works in both modes)',
         ];
 
-        // EdDSA Keys
-        $private_key = get_option('oneclick_private_key');
-        $public_key = get_option('oneclick_public_key');
+        $logger_available = function_exists('wc_get_logger') && wc_get_logger();
         $checks[] = [
-            'name'   => 'EdDSA Keypair',
-            'pass'   => !empty($private_key) && !empty($public_key),
-            'detail' => (!empty($private_key) && !empty($public_key))
-                ? 'Generated and stored'
-                : 'Missing — deactivate and reactivate plugin to generate',
+            'name'   => 'WooCommerce Logger',
+            'pass'   => (bool) $logger_available,
+            'detail' => $logger_available ? 'Available — OneClick logs write to WooCommerce → Status → Logs' : 'Unavailable — OneClick will fallback to PHP error_log',
         ];
 
-        // Backend Public Key (synced from backend for JWT verification)
+        $backend_url = get_option('oneclick_backend_url', '');
+        $checks[] = [
+            'name'   => 'Backend URL',
+            'pass'   => !empty($backend_url),
+            'detail' => !empty($backend_url) ? $backend_url : 'Not configured',
+        ];
+
+        $api = OneClick_API_Client::instance();
+        $health = !empty($backend_url) ? $api->get('/health') : new WP_Error('missing_backend_url', 'Backend URL is not configured');
+        $checks[] = [
+            'name'   => 'Backend Health',
+            'pass'   => !is_wp_error($health) && isset($health['status']) && in_array($health['status'], ['ok', 'healthy'], true),
+            'detail' => !is_wp_error($health)
+                ? sprintf('Status: %s, Version: %s', $health['status'] ?? 'unknown', $health['version'] ?? 'unknown')
+                : $health->get_error_message(),
+        ];
+
+        $license_key = get_option('oneclick_license_key', '');
+        $checks[] = [
+            'name'   => 'License Key',
+            'pass'   => !empty($license_key),
+            'detail' => !empty($license_key) ? 'Stored in WordPress options (masked in UI)' : 'Missing — activate license in OneClick settings',
+        ];
+
+        $licensed_check = !empty($license_key) ? $api->get('/api/ai/disclosure') : new WP_Error('missing_license', 'License key is missing');
+        $checks[] = [
+            'name'   => 'Licensed Backend API',
+            'pass'   => !is_wp_error($licensed_check),
+            'detail' => !is_wp_error($licensed_check)
+                ? 'License accepted by backend for this tenant'
+                : $licensed_check->get_error_message(),
+        ];
+
         $backend_pub_key = get_option('oneclick_backend_public_key');
         $checks[] = [
-            'name'   => 'Backend Public Key',
-            'pass'   => !empty($backend_pub_key),
+            'name'   => 'Legacy Backend Public Key',
+            'pass'   => true,
             'detail' => !empty($backend_pub_key)
-                ? 'Synced (used for JWT verification)'
-                : 'Missing — go to OneClick Settings → License tab → click Refresh',
+                ? 'Synced; kept only for compatibility diagnostics'
+                : 'Not synced; optional for current purchase-session flow',
         ];
 
-        // Stripe Gateway
         $stripe_settings = get_option('woocommerce_stripe_settings', []);
         $stripe_allowed = (int) get_option('oneclick_use_woocommerce_stripe_keys', 0) === 1;
         $stripe_enabled = !empty($stripe_settings['enabled']) && $stripe_settings['enabled'] === 'yes';
@@ -225,42 +252,23 @@ class OneClick_Compatibility_Test {
                     : 'Allowed; WooCommerce Stripe Gateway is not enabled'),
         ];
 
-        // Backend URL
-        $backend_url = get_option('oneclick_backend_url', '');
-        $checks[] = [
-            'name'   => 'Backend URL',
-            'pass'   => !empty($backend_url),
-            'detail' => !empty($backend_url) ? $backend_url : 'Not configured',
-        ];
-
-        // Backend Health Check
-        $backend_health = false;
-        $backend_detail = 'Not tested';
-        if (!empty($backend_url)) {
-            $api = OneClick_API_Client::instance();
-            $health = $api->get('/health');
-            if (!is_wp_error($health) && isset($health['status'])) {
-                $backend_health = ($health['status'] === 'ok' || $health['status'] === 'healthy');
-                $backend_detail = sprintf('Status: %s, Version: %s', $health['status'] ?? 'unknown', $health['version'] ?? 'unknown');
-            } else {
-                $backend_detail = is_wp_error($health) ? $health->get_error_message() : 'Unexpected response';
-            }
-        }
-        $checks[] = [
-            'name'   => 'Backend Health',
-            'pass'   => $backend_health,
-            'detail' => $backend_detail,
-        ];
-
-        // Composer Dependencies
         $composer_ok = file_exists(ONECLICK_PLUGIN_DIR . 'vendor/autoload.php');
         $checks[] = [
             'name'   => 'Composer Dependencies',
             'pass'   => $composer_ok,
-            'detail' => $composer_ok ? 'Installed (vendor/autoload.php found)' : 'Missing — run "composer install"',
+            'detail' => $composer_ok ? 'Installed (vendor/autoload.php found)' : 'Missing — install packaged plugin build with vendor dependencies',
         ];
 
-        // WP Cron
+        $action_scheduler_available = function_exists('as_next_scheduled_action') || class_exists('ActionScheduler');
+        $fallback_worker_next = wp_next_scheduled('oneclick_process_due_purchase_sessions');
+        $checks[] = [
+            'name'   => 'Session Worker',
+            'pass'   => $action_scheduler_available || !empty($fallback_worker_next),
+            'detail' => $action_scheduler_available
+                ? 'Action Scheduler available for due purchase sessions'
+                : ($fallback_worker_next ? sprintf('WP-Cron fallback scheduled: %s', wp_date('Y-m-d H:i:s', $fallback_worker_next)) : 'No Action Scheduler and no WP-Cron fallback scheduled'),
+        ];
+
         $cron_events = [
             'oneclick_daily_license_check' => 'Daily License Check',
             'oneclick_detect_abandoned'    => 'Abandoned Cart Detection',
@@ -271,21 +279,14 @@ class OneClick_Compatibility_Test {
             $checks[] = [
                 'name'   => 'Cron: ' . $label,
                 'pass'   => !empty($next),
-                'detail' => $next
-                    ? sprintf('Next run: %s', wp_date('Y-m-d H:i:s', $next))
-                    : 'Not scheduled',
+                'detail' => $next ? sprintf('Next run: %s', wp_date('Y-m-d H:i:s', $next)) : 'Not scheduled',
             ];
         }
 
+        oneclick_log('OneClick Compatibility: checks completed', 'oneclick-core');
         wp_send_json_success(['checks' => $checks]);
     }
 
-    /**
-     * AJAX: Send test email via backend
-     *
-     * Generates a real JWT token and calls /api/send-email with correct fields.
-     * This tests the full email path: JWT → backend → SendGrid → inbox.
-     */
     public function ajax_test_email() {
         check_ajax_referer('oneclick_compat_nonce', 'nonce');
 
@@ -298,50 +299,20 @@ class OneClick_Compatibility_Test {
             wp_send_json_error(['message' => 'Invalid email address']);
         }
 
-        // Find first real product from the store
-        $products = wc_get_products(['status' => 'publish', 'limit' => 1]);
-        if (empty($products)) {
-            wp_send_json_error(['message' => 'No products found. Import test products first.']);
-        }
-        $product = $products[0];
-
-        // Generate a test JWT token (backend signs it, with test flag)
-        $jwt = new OneClick_JWT_Handler();
-        $token_data = [
-            'user_id'      => get_current_user_id(),
-            'user_email'   => $email,
-            'product_id'   => $product->get_id(),
-            'product_name' => $product->get_name(),
-            'price'        => (float) $product->get_price(),
-            'test'         => true,
-        ];
-
-        $token = $jwt->generate_via_backend($token_data);
-
-        if (!$token) {
-            // Fallback to local generation
-            $token = $jwt->generate($token_data);
-        }
-
-        if (!$token) {
-            wp_send_json_error(['message' => 'Failed to generate JWT token for test email']);
-        }
-
-        // Call /api/send-email with the required fields
         $api = OneClick_API_Client::instance();
-        $result = $api->post('/api/send-email', [
-            'token'         => $token,
-            'to_email'      => $email,
-            'customer_name' => wp_get_current_user()->display_name ?: 'Test User',
-            'product_name'  => $product->get_name(),
-            'price'         => (float) $product->get_price(),
+        $result = $api->post('/api/email/test-delivery', [
+            'site_url' => site_url(),
+            'to_email' => $email,
+        ], [
+            'timeout' => 20,
         ]);
 
         if (is_wp_error($result)) {
+            oneclick_log('OneClick Compatibility: test email failed — ' . $result->get_error_message(), 'oneclick-core', 'error');
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
 
+        oneclick_log(sprintf('OneClick Compatibility: test email accepted for %s', $email), 'oneclick-core');
         wp_send_json_success(['message' => sprintf(__('Test email sent to %s', 'woo-oneclick'), $email)]);
     }
-
 }

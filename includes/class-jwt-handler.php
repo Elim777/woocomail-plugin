@@ -44,12 +44,12 @@ class OneClick_JWT_Handler {
             $result = $api->post('/api/tokens/generate', $request_data);
 
             if (is_wp_error($result)) {
-                error_log('OneClick JWT: Backend token generation failed: ' . $result->get_error_message());
+                oneclick_log('OneClick JWT: Backend token generation failed: ' . $result->get_error_message());
                 return false;
             }
 
             if (!empty($result['token'])) {
-                error_log(sprintf(
+                oneclick_log(sprintf(
                     'OneClick JWT: Token generated via backend for %s (purchase_url: %s)',
                     $payload['user_email'] ?? 'unknown',
                     $result['purchase_url'] ?? 'n/a'
@@ -57,11 +57,11 @@ class OneClick_JWT_Handler {
                 return $result['token'];
             }
 
-            error_log('OneClick JWT: Backend returned no token');
+            oneclick_log('OneClick JWT: Backend returned no token');
             return false;
 
         } catch (Exception $e) {
-            error_log('OneClick JWT: Backend generation error: ' . $e->getMessage());
+            oneclick_log('OneClick JWT: Backend generation error: ' . $e->getMessage());
             return false;
         }
     }
@@ -84,7 +84,7 @@ class OneClick_JWT_Handler {
             $result = $api->post('/api/tokens/verify-and-claim', ['token' => $token]);
 
             if (is_wp_error($result)) {
-                error_log('OneClick JWT: Backend verify-and-claim failed: ' . $result->get_error_message());
+                oneclick_log('OneClick JWT: Backend verify-and-claim failed: ' . $result->get_error_message());
                 return [
                     'valid' => false,
                     'error' => 'Backend verification failed: ' . $result->get_error_message(),
@@ -94,7 +94,7 @@ class OneClick_JWT_Handler {
             return $result;
 
         } catch (Exception $e) {
-            error_log('OneClick JWT: Backend verify error: ' . $e->getMessage());
+            oneclick_log('OneClick JWT: Backend verify error: ' . $e->getMessage());
             return [
                 'valid' => false,
                 'error' => 'Verification error: ' . $e->getMessage(),

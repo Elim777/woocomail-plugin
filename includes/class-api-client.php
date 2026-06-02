@@ -114,7 +114,7 @@ class OneClick_API_Client {
      */
     private function handle_response($response, $endpoint) {
         if (is_wp_error($response)) {
-            error_log(sprintf(
+            oneclick_log(sprintf(
                 'OneClick API: Request to %s failed: %s',
                 $endpoint,
                 $response->get_error_message()
@@ -139,7 +139,7 @@ class OneClick_API_Client {
             $error_message = $body;
         }
 
-        error_log(sprintf(
+        oneclick_log(sprintf(
             'OneClick API: %s returned HTTP %d: %s',
             $endpoint,
             $status_code,
