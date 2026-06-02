@@ -15,7 +15,7 @@ class OneClick_Public_Links {
 
     const MENU_SLUG = 'oneclick-public-links';
     const VISITOR_COOKIE = 'oneclick_public_visitor';
-    const REWRITE_VERSION = 'public-email-claim-v2';
+    const REWRITE_VERSION = 'public-email-claim-v3';
 
     public function __construct() {
         add_action('admin_menu', [$this, 'add_submenu']);
@@ -80,9 +80,40 @@ class OneClick_Public_Links {
     }
 
     public function add_rewrite_rule() {
+        self::register_rewrite_rules();
+    }
+
+    public static function register_rewrite_rules() {
         add_rewrite_rule('^oneclick/email-claim/([A-Za-z0-9_-]{10,50})/?$', 'index.php?oneclick_email_claim_code=$matches[1]', 'top');
         add_rewrite_rule('^oneclick/claim/([A-Za-z0-9_-]{10,50})/?$', 'index.php?oneclick_public_claim_code=$matches[1]', 'top');
         add_rewrite_rule('^oneclick/([A-Za-z0-9]{8,16})/?$', 'index.php?oneclick_public_short_id=$matches[1]', 'top');
+    }
+
+    public static function rewrite_version() {
+        return ONECLICK_VERSION . '-' . self::REWRITE_VERSION;
+    }
+
+    public static function rewrite_rules_present() {
+        $rules = get_option('rewrite_rules');
+        if (!is_array($rules)) {
+            return false;
+        }
+
+        $required = [
+            'oneclick/email-claim/' => false,
+            'oneclick/claim/' => false,
+            'oneclick/' => false,
+        ];
+
+        foreach (array_keys($rules) as $pattern) {
+            foreach ($required as $needle => $present) {
+                if (!$present && strpos($pattern, $needle) !== false) {
+                    $required[$needle] = true;
+                }
+            }
+        }
+
+        return !in_array(false, $required, true);
     }
 
     public function add_query_vars($vars) {
@@ -93,13 +124,17 @@ class OneClick_Public_Links {
     }
 
     public function maybe_flush_rewrite_rules() {
-        $rewrite_version = ONECLICK_VERSION . '-' . self::REWRITE_VERSION;
+        $rewrite_version = self::rewrite_version();
         if (get_option('oneclick_public_links_rewrite_version') === $rewrite_version) {
             return;
         }
-        $this->add_rewrite_rule();
+        self::register_rewrite_rules();
         flush_rewrite_rules(false);
         update_option('oneclick_public_links_rewrite_version', $rewrite_version, false);
+        oneclick_log(sprintf(
+            'OneClick Rewrite: rules flushed for version %s',
+            $rewrite_version
+        ), 'oneclick-public');
     }
 
     public function handle_passthrough() {

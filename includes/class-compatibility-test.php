@@ -266,6 +266,15 @@ class OneClick_Compatibility_Test {
             'detail' => $composer_ok ? 'Installed (vendor/autoload.php found)' : 'Missing — install packaged plugin build with vendor dependencies',
         ];
 
+        $routes_ok = class_exists('OneClick_Public_Links') && OneClick_Public_Links::rewrite_rules_present();
+        $checks[] = [
+            'name'   => 'OneClick Routes',
+            'pass'   => $routes_ok,
+            'detail' => $routes_ok
+                ? 'Email claim, public claim and public shop routes are registered'
+                : 'Routes are missing from WordPress rewrite rules. Open any OneClick admin page to auto-refresh, or save Settings → Permalinks.',
+        ];
+
         $action_scheduler_available = function_exists('as_next_scheduled_action') || class_exists('ActionScheduler');
         $fallback_worker_next = wp_next_scheduled('oneclick_process_due_purchase_sessions');
         $checks[] = [

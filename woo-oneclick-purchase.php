@@ -118,7 +118,17 @@ function oneclick_activation() {
         wp_schedule_event(time() + 60, 'oneclick_minutely', 'oneclick_process_due_purchase_sessions');
     }
 
-    // Flush rewrite rules for REST API endpoints
+    // Register OneClick non-REST routes before flushing permalink rules.
+    $public_links_file = ONECLICK_PLUGIN_DIR . 'includes/class-public-links.php';
+    if (!class_exists('OneClick_Public_Links') && file_exists($public_links_file)) {
+        require_once $public_links_file;
+    }
+    if (class_exists('OneClick_Public_Links')) {
+        OneClick_Public_Links::register_rewrite_rules();
+        update_option('oneclick_public_links_rewrite_version', OneClick_Public_Links::rewrite_version(), false);
+    }
+
+    // Flush rewrite rules for OneClick shop/email/public claim routes.
     flush_rewrite_rules();
 }
 register_activation_hook(__FILE__, 'oneclick_activation');
