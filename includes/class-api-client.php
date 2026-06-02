@@ -139,6 +139,10 @@ class OneClick_API_Client {
             $error_message = $body;
         }
 
+        if ($status_code === 403 && stripos($error_message, 'Missing X-License-Key') !== false) {
+            $error_message = __('OneClick license is not active yet. Open OneClick → Settings → License and refresh the license status.', 'woo-oneclick');
+        }
+
         oneclick_log(sprintf(
             'OneClick API: %s returned HTTP %d: %s',
             $endpoint,

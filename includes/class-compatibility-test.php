@@ -157,6 +157,10 @@ class OneClick_Compatibility_Test {
         }
 
         $checks = [];
+        if (empty(get_option('oneclick_license_key', '')) && class_exists('OneClick_Settings')) {
+            $settings = new OneClick_Settings();
+            $settings->refresh_license_from_backend();
+        }
 
         $checks[] = [
             'name'   => 'PHP Version',
@@ -213,12 +217,15 @@ class OneClick_Compatibility_Test {
             'detail' => !empty($license_key) ? 'Stored in WordPress options (masked in UI)' : 'Missing — activate license in OneClick settings',
         ];
 
-        $licensed_check = !empty($license_key) ? $api->get('/api/ai/disclosure') : new WP_Error('missing_license', 'License key is missing');
+        $licensed_check = !empty($license_key) ? $api->post('/api/license/validate', [
+            'license_key' => $license_key,
+            'site_url' => site_url(),
+        ]) : new WP_Error('missing_license', 'License key is missing');
         $checks[] = [
             'name'   => 'Licensed Backend API',
-            'pass'   => !is_wp_error($licensed_check),
+            'pass'   => !is_wp_error($licensed_check) && !empty($licensed_check['valid']),
             'detail' => !is_wp_error($licensed_check)
-                ? 'License accepted by backend for this tenant'
+                ? (!empty($licensed_check['valid']) ? 'License accepted by backend for this tenant' : ($licensed_check['error'] ?? 'License validation failed'))
                 : $licensed_check->get_error_message(),
         ];
 
@@ -297,6 +304,14 @@ class OneClick_Compatibility_Test {
         $email = sanitize_email($_POST['email'] ?? '');
         if (empty($email)) {
             wp_send_json_error(['message' => 'Invalid email address']);
+        }
+
+        if (empty(get_option('oneclick_license_key', '')) && class_exists('OneClick_Settings')) {
+            $settings = new OneClick_Settings();
+            $license_refresh = $settings->refresh_license_from_backend();
+            if (is_wp_error($license_refresh)) {
+                wp_send_json_error(['message' => $license_refresh->get_error_message()]);
+            }
         }
 
         $api = OneClick_API_Client::instance();

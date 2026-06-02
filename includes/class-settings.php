@@ -23,8 +23,61 @@ class OneClick_Settings {
         add_action('admin_menu', [$this, 'add_menu']);
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_init', [$this, 'handle_license_check_after_checkout']);
+        add_action('admin_init', [$this, 'maybe_bootstrap_license_for_admin_page']);
         add_action('admin_init', [$this, 'delete_legacy_stripe_key_options']);
+        add_action('rest_api_init', [$this, 'register_license_bootstrap_route']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_styles']);
+    }
+
+    /**
+     * Public, read-only challenge endpoint used by the backend to verify that
+     * this WordPress site owns a short-lived bootstrap token.
+     */
+    public function register_license_bootstrap_route() {
+        register_rest_route('oneclick/v1', '/license-bootstrap', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'handle_license_bootstrap_challenge'],
+            'permission_callback' => '__return_true',
+        ]);
+    }
+
+    public function handle_license_bootstrap_challenge($request) {
+        $challenge = sanitize_text_field($request->get_param('challenge'));
+        if (empty($challenge)) {
+            return new WP_REST_Response([
+                'valid' => false,
+                'site_url' => site_url(),
+            ], 400);
+        }
+
+        $transient_key = $this->license_bootstrap_transient_key($challenge);
+        $stored = get_transient($transient_key);
+        $valid = is_string($stored) && hash_equals($stored, $challenge);
+        if ($valid) {
+            delete_transient($transient_key);
+        }
+
+        return new WP_REST_Response([
+            'valid' => $valid,
+            'site_url' => site_url(),
+        ], $valid ? 200 : 403);
+    }
+
+    public function maybe_bootstrap_license_for_admin_page() {
+        if (!current_user_can('manage_woocommerce')) {
+            return;
+        }
+        if (!empty(get_option('oneclick_license_key', ''))) {
+            return;
+        }
+        if (!isset($_GET['page']) || strpos(sanitize_key($_GET['page']), 'oneclick') !== 0) {
+            return;
+        }
+        if (isset($_GET['upgraded']) && $_GET['upgraded'] === '1') {
+            return;
+        }
+
+        $this->refresh_license_from_backend();
     }
 
     /**
@@ -134,6 +187,55 @@ class OneClick_Settings {
         return substr($license_key, 0, 7) . '******' . substr($license_key, -4);
     }
 
+    private function license_bootstrap_transient_key($challenge) {
+        return 'oneclick_license_bootstrap_' . substr(hash('sha256', (string) $challenge), 0, 40);
+    }
+
+    private function store_license_result($result) {
+        update_option('oneclick_license_key', $result['license_key'] ?? '', true);
+        update_option('oneclick_license_tier', $result['tier'] ?? 'free', true);
+        update_option('oneclick_license_status', $result['status'] ?? 'free', true);
+        update_option('oneclick_license_quota', $result['email_quota'] ?? 50, true);
+        update_option('oneclick_license_max_activations', $result['max_activations'] ?? 1, true);
+        update_option('oneclick_license_expires', $result['expires_at'] ?? '', true);
+        update_option('oneclick_license_last_check', current_time('mysql'), true);
+    }
+
+    public function bootstrap_free_license() {
+        $challenge = wp_generate_password(32, false, false);
+        set_transient($this->license_bootstrap_transient_key($challenge), $challenge, 5 * MINUTE_IN_SECONDS);
+
+        $api = OneClick_API_Client::instance();
+        $result = $api->post('/api/license/bootstrap-free', [
+            'site_url'  => site_url(),
+            'challenge' => $challenge,
+        ], [
+            'timeout' => 20,
+        ]);
+
+        delete_transient($this->license_bootstrap_transient_key($challenge));
+
+        if (is_wp_error($result)) {
+            oneclick_log('OneClick License: Free bootstrap failed: ' . $result->get_error_message(), 'oneclick-core', 'error');
+            return $result;
+        }
+
+        if (empty($result['license_key'])) {
+            $error = new WP_Error('oneclick_free_bootstrap_missing_key', __('Backend did not return a license key.', 'woo-oneclick'));
+            oneclick_log('OneClick License: Free bootstrap failed: backend returned no license key', 'oneclick-core', 'error');
+            return $error;
+        }
+
+        $this->store_license_result($result);
+        oneclick_log(sprintf(
+            'OneClick License: Bootstrap OK — tier=%s, quota=%d',
+            $result['tier'] ?? 'free',
+            $result['email_quota'] ?? 0
+        ), 'oneclick-core');
+
+        return $result;
+    }
+
     /**
      * Handle license check after returning from Stripe checkout
      *
@@ -163,14 +265,22 @@ class OneClick_Settings {
             ]);
 
             if (is_wp_error($activation)) {
-                oneclick_log('OneClick License: Session activation failed: ' . $activation->get_error_message());
+                set_transient('oneclick_license_activation_error', $activation->get_error_message(), 60);
+                oneclick_log('OneClick License: Session activation failed: ' . $activation->get_error_message(), 'oneclick-core', 'error');
             } else {
-                oneclick_log('OneClick License: Session activation result: ' . wp_json_encode($activation));
+                if (!empty($activation['license_key'])) {
+                    $this->store_license_result($activation);
+                    set_transient('oneclick_license_activation_success', __('PRO license activated successfully.', 'woo-oneclick'), 60);
+                }
+                oneclick_log('OneClick License: Session activation result: ' . wp_json_encode($activation), 'oneclick-core');
             }
         }
 
         // Refresh license info from backend DB
-        $this->refresh_license_from_backend();
+        $refresh = $this->refresh_license_from_backend();
+        if (is_wp_error($refresh) && empty(get_option('oneclick_license_key', ''))) {
+            set_transient('oneclick_license_activation_error', $refresh->get_error_message(), 60);
+        }
 
         // Remove the query params to prevent re-triggering on refresh
         wp_safe_redirect(admin_url('admin.php?page=oneclick-settings&tab=license&license_refreshed=1'));
@@ -192,29 +302,40 @@ class OneClick_Settings {
         ]);
 
         if (is_wp_error($result)) {
-            oneclick_log('OneClick License: Failed to check license: ' . $result->get_error_message());
+            oneclick_log('OneClick License: Failed to check license: ' . $result->get_error_message(), 'oneclick-core', 'error');
             return $result;
         }
 
         // Store license data in wp_options
         if (!empty($result['has_license']) && $result['has_license'] === true) {
-            update_option('oneclick_license_key', $result['license_key'] ?? '', true);
-            update_option('oneclick_license_tier', $result['tier'] ?? 'free', true);
-            update_option('oneclick_license_status', $result['status'] ?? 'free', true);
-            update_option('oneclick_license_quota', $result['email_quota'] ?? 0, true);
-            update_option('oneclick_license_max_activations', $result['max_activations'] ?? 1, true);
-            update_option('oneclick_license_expires', $result['expires_at'] ?? '', true);
+            if (empty($result['license_key'])) {
+                $error = new WP_Error('oneclick_license_missing_key', __('Backend returned a license record without a license key.', 'woo-oneclick'));
+                oneclick_log('OneClick License: Refresh failed because backend returned has_license without license_key', 'oneclick-core', 'error');
+                return $error;
+            }
+            $this->store_license_result($result);
         } else {
-            update_option('oneclick_license_tier', $result['tier'] ?? 'free', true);
-            update_option('oneclick_license_status', $result['status'] ?? 'free', true);
-            update_option('oneclick_license_quota', $result['email_quota'] ?? 50, true);
-            // Clear key-related options for free tier
-            delete_option('oneclick_license_key');
-            delete_option('oneclick_license_max_activations');
-            delete_option('oneclick_license_expires');
-        }
+            if (!empty(get_option('oneclick_license_key', ''))) {
+                $error = new WP_Error(
+                    'oneclick_license_not_found',
+                    __('Backend did not find a license for this site. The existing local license key was left unchanged.', 'woo-oneclick')
+                );
+                oneclick_log('OneClick License: Backend returned no license; existing local key left unchanged', 'oneclick-core', 'error');
+                return $error;
+            }
 
-        update_option('oneclick_license_last_check', current_time('mysql'), true);
+            $bootstrap = $this->bootstrap_free_license();
+            if (is_wp_error($bootstrap)) {
+                if (empty(get_option('oneclick_license_key', ''))) {
+                    update_option('oneclick_license_tier', 'free', true);
+                    update_option('oneclick_license_status', 'bootstrap_failed', true);
+                    update_option('oneclick_license_quota', $result['email_quota'] ?? 50, true);
+                    update_option('oneclick_license_last_check', current_time('mysql'), true);
+                }
+                return $bootstrap;
+            }
+            $result = $bootstrap;
+        }
 
         // Sync backend public key (needed for JWT verification)
         $this->sync_backend_public_key();
@@ -350,6 +471,16 @@ class OneClick_Settings {
                 esc_html(strtoupper($tier))
             );
             echo '</p></div>';
+        }
+        $activation_success = get_transient('oneclick_license_activation_success');
+        if ($activation_success) {
+            delete_transient('oneclick_license_activation_success');
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($activation_success) . '</p></div>';
+        }
+        $activation_error = get_transient('oneclick_license_activation_error');
+        if ($activation_error) {
+            delete_transient('oneclick_license_activation_error');
+            echo '<div class="notice notice-error is-dismissible"><p>' . esc_html($activation_error) . '</p></div>';
         }
         ?>
         <div class="wrap">
