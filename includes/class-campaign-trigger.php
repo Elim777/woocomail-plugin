@@ -403,6 +403,7 @@ class OneClick_Campaign_Trigger {
         oneclick_log('');
 
         $api    = OneClick_API_Client::instance();
+        $session_variant = $this->get_purchase_session_variant($order_id, $payload);
         $result = $api->post('/api/send-campaign-email', [
             'site_url'       => site_url(),
             'to_email'       => $user->user_email,
@@ -412,6 +413,7 @@ class OneClick_Campaign_Trigger {
             'offer_products' => $offer_products,
             'click_behavior' => $click_behavior,
             'completion_mode' => $completion_mode,
+            'session_variant' => $session_variant,
             'email_subject'  => $reaction['email_subject'] ?? null,
             'email_body'     => $reaction['email_body'] ?? null,
         ]);
@@ -474,5 +476,20 @@ class OneClick_Campaign_Trigger {
         return in_array($mode, ['purchase_session', 'immediate_purchase'], true)
             ? $mode
             : 'purchase_session';
+    }
+
+    private function get_purchase_session_variant($order_id, $payload) {
+        $configured = defined('ONECLICK_PURCHASE_SESSION_VARIANT')
+            ? ONECLICK_PURCHASE_SESSION_VARIANT
+            : 'dynamic';
+        $variant = sanitize_key((string) apply_filters(
+            'oneclick_purchase_session_variant',
+            $configured,
+            'campaign_email',
+            $order_id,
+            $payload
+        ));
+
+        return in_array($variant, ['standard', 'dynamic'], true) ? $variant : 'dynamic';
     }
 }

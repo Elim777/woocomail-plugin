@@ -460,6 +460,7 @@ class OneClick_Settings {
             return;
         }
 
+        ob_start();
         $this->current_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'general';
 
         // Show notice if license was just refreshed
@@ -506,6 +507,7 @@ class OneClick_Settings {
             ?>
         </div>
         <?php
+        OneClick_Admin_UI::render('oneclick-settings', ob_get_clean());
     }
 
     /**

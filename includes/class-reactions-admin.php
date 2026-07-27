@@ -115,6 +115,7 @@ class OneClick_Reactions_Admin {
             return;
         }
 
+        ob_start();
         $view = sanitize_key($_GET['view'] ?? 'list');
         $reaction_id = absint($_GET['id'] ?? 0);
 
@@ -129,6 +130,7 @@ class OneClick_Reactions_Admin {
         }
 
         echo '</div>';
+        OneClick_Admin_UI::render(self::MENU_SLUG, ob_get_clean());
     }
 
     private function render_list() {
@@ -367,7 +369,7 @@ class OneClick_Reactions_Admin {
         wp_enqueue_script(
             'oneclick-ai-email-generate',
             plugin_dir_url(dirname(__FILE__)) . 'assets/js/ai-email-generate.js',
-            ['jquery'],
+            ['jquery', 'oneclick-admin-ui'],
             '1.1.0',
             true
         );

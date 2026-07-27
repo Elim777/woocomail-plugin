@@ -1,0 +1,238 @@
+body.oc-variant-dynamic {
+    --oc-dynamic-normal: #91e6ff;
+    --oc-dynamic-warning: #ffd166;
+    --oc-dynamic-danger: #ff625f;
+}
+
+body.oc-variant-dynamic::after {
+    position: fixed;
+    z-index: 100;
+    inset: 0;
+    border: 0 solid transparent;
+    pointer-events: none;
+    content: "";
+    transition: border-color 160ms ease, border-width 160ms ease, box-shadow 160ms ease;
+}
+
+body.oc-variant-dynamic.is-danger::after {
+    border-width: 2px;
+    border-color: rgba(255, 98, 95, .55);
+    box-shadow: inset 0 0 64px rgba(255, 98, 95, .12);
+}
+
+body.oc-variant-dynamic .oc-topbar {
+    padding-bottom: 0;
+}
+
+body.oc-variant-dynamic .oc-header {
+    padding-bottom: 14px;
+}
+
+body.oc-variant-dynamic .oc-status-chip {
+    min-width: 154px;
+    justify-content: center;
+    border-color: color-mix(in srgb, var(--oc-dynamic-normal) 48%, transparent);
+    color: var(--oc-dynamic-normal);
+    background: color-mix(in srgb, var(--oc-dynamic-normal) 8%, transparent);
+}
+
+body.oc-variant-dynamic .oc-status-chip #oc-timer {
+    min-width: 88px;
+    font: 600 25px/1 "JetBrains Mono", ui-monospace, monospace;
+    text-align: right;
+    text-transform: none;
+    font-variant-numeric: tabular-nums;
+}
+
+body.oc-variant-dynamic.is-warning .oc-status-chip {
+    border-color: color-mix(in srgb, var(--oc-dynamic-warning) 56%, transparent);
+    color: var(--oc-dynamic-warning);
+    background: color-mix(in srgb, var(--oc-dynamic-warning) 8%, transparent);
+}
+
+body.oc-variant-dynamic.is-danger .oc-status-chip {
+    border-color: color-mix(in srgb, var(--oc-dynamic-danger) 68%, transparent);
+    color: var(--oc-dynamic-danger);
+    background: color-mix(in srgb, var(--oc-dynamic-danger) 10%, transparent);
+    animation: oc-dynamic-pulse 760ms ease-in-out infinite;
+}
+
+body.oc-variant-dynamic[data-session-status="finalizing"] .oc-status-chip,
+body.oc-variant-dynamic[data-session-status="finalized"] .oc-status-chip,
+body.oc-variant-dynamic[data-session-status="failed"] .oc-status-chip,
+body.oc-variant-dynamic[data-session-status="cancelled"] .oc-status-chip {
+    animation: none;
+}
+
+body.oc-variant-dynamic .oc-dynamic-timer-panel {
+    padding-top: 0;
+    padding-bottom: 14px;
+}
+
+body.oc-variant-dynamic .oc-dynamic-timer-meta {
+    display: flex;
+    min-height: 30px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    color: var(--oc-dynamic-normal);
+    font: 600 11px/1 "JetBrains Mono", ui-monospace, monospace;
+    text-transform: uppercase;
+}
+
+body.oc-variant-dynamic.is-warning .oc-dynamic-timer-meta {
+    color: var(--oc-dynamic-warning);
+}
+
+body.oc-variant-dynamic.is-danger .oc-dynamic-timer-meta {
+    color: var(--oc-dynamic-danger);
+}
+
+body.oc-variant-dynamic .oc-sound-toggle {
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--oc-outline-soft);
+    border-radius: 4px;
+    color: var(--oc-muted);
+    background: transparent;
+    font: 600 10px/1 "JetBrains Mono", ui-monospace, monospace;
+    text-transform: uppercase;
+}
+
+body.oc-variant-dynamic .oc-sound-toggle:hover,
+body.oc-variant-dynamic .oc-sound-toggle[aria-pressed="true"] {
+    border-color: currentColor;
+    color: var(--oc-dynamic-normal);
+}
+
+body.oc-variant-dynamic .oc-dynamic-track {
+    position: relative;
+    width: 100%;
+    height: 6px;
+    overflow: hidden;
+    border: 1px solid var(--oc-outline-soft);
+    border-radius: 4px;
+    background: var(--oc-chip);
+}
+
+body.oc-variant-dynamic .oc-dynamic-track span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: var(--oc-dynamic-normal);
+    transform-origin: left center;
+    transition: width 90ms linear, background-color 160ms ease;
+}
+
+body.oc-variant-dynamic.is-warning .oc-dynamic-track span {
+    background: var(--oc-dynamic-warning);
+}
+
+body.oc-variant-dynamic.is-danger .oc-dynamic-track span {
+    background: var(--oc-dynamic-danger);
+}
+
+body.oc-variant-dynamic .oc-confirm {
+    min-height: 52px;
+    border-color: var(--oc-dynamic-normal);
+    color: #05202a;
+    background: var(--oc-dynamic-normal);
+    font-size: 12px;
+}
+
+body.oc-variant-dynamic .oc-confirm:hover:not(:disabled) {
+    border-color: #c9f4ff;
+    background: #c9f4ff;
+}
+
+body.oc-variant-dynamic.is-warning .oc-confirm {
+    border-color: var(--oc-dynamic-warning);
+    background: var(--oc-dynamic-warning);
+}
+
+body.oc-variant-dynamic.is-danger .oc-confirm {
+    border-color: var(--oc-dynamic-danger);
+    color: #2b0505;
+    background: var(--oc-dynamic-danger);
+}
+
+body.oc-variant-dynamic.is-confirming .oc-confirm {
+    color: var(--oc-muted);
+    background: var(--oc-surface-soft);
+}
+
+body.oc-variant-dynamic .oc-mini-button {
+    min-width: 64px;
+}
+
+body.oc-variant-dynamic .oc-action-row small::after {
+    content: " · 3 maximum";
+}
+
+body.oc-theme-merchant.oc-variant-dynamic .oc-dynamic-track {
+    background: rgba(20, 27, 43, .08);
+}
+
+body.oc-theme-merchant.oc-variant-dynamic .oc-dynamic-timer-panel {
+    padding-right: 24px;
+    padding-left: 24px;
+}
+
+@keyframes oc-dynamic-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 rgba(255, 98, 95, 0);
+    }
+    50% {
+        transform: scale(1.025);
+        box-shadow: 0 0 24px rgba(255, 98, 95, .18);
+    }
+}
+
+@media (max-width: 640px) {
+    body.oc-variant-dynamic .oc-shell,
+    body.oc-variant-dynamic .oc-main,
+    body.oc-variant-dynamic .oc-panel,
+    body.oc-variant-dynamic .oc-products,
+    body.oc-variant-dynamic .oc-product,
+    body.oc-variant-dynamic .oc-sidebar {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    body.oc-variant-dynamic .oc-brand > div:last-child,
+    body.oc-variant-dynamic .oc-line > div:last-child,
+    body.oc-variant-dynamic .oc-product-body {
+        min-width: 0;
+    }
+
+    body.oc-variant-dynamic .oc-brand h1,
+    body.oc-variant-dynamic .oc-brand p,
+    body.oc-variant-dynamic .oc-product-title,
+    body.oc-variant-dynamic .oc-line-title {
+        overflow-wrap: anywhere;
+    }
+
+    body.oc-variant-dynamic .oc-status-chip #oc-timer {
+        min-width: 0;
+        text-align: center;
+    }
+
+    body.oc-variant-dynamic .oc-dynamic-timer-meta {
+        gap: 10px;
+    }
+
+    body.oc-variant-dynamic .oc-sound-toggle {
+        min-height: 44px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.oc-variant-dynamic::after,
+    body.oc-variant-dynamic .oc-status-chip,
+    body.oc-variant-dynamic .oc-dynamic-track span {
+        animation: none !important;
+        transition: none !important;
+    }
+}

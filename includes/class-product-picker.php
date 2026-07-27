@@ -45,7 +45,7 @@ class OneClick_Product_Picker {
         wp_enqueue_script(
             'oneclick-admin',
             ONECLICK_PLUGIN_URL . 'assets/js/admin-actions.js',
-            ['jquery', 'wc-enhanced-select'],
+            ['jquery', 'wc-enhanced-select', 'oneclick-admin-ui'],
             ONECLICK_VERSION,
             true
         );

@@ -88,7 +88,7 @@ class OneClick_AI_Setup {
         wp_enqueue_script(
             'oneclick-ai-setup',
             ONECLICK_PLUGIN_URL . 'assets/js/ai-setup.js',
-            ['jquery'],
+            ['jquery', 'oneclick-admin-ui'],
             ONECLICK_VERSION,
             true
         );
@@ -113,6 +113,7 @@ class OneClick_AI_Setup {
      * Render AI Setup page
      */
     public function render_page() {
+        ob_start();
         $tier = get_option('oneclick_license_tier', 'free');
         $is_pro = ($tier === 'pro');
         $disclosure_acknowledged = self::is_disclosure_acknowledged();
@@ -225,6 +226,7 @@ class OneClick_AI_Setup {
             </div>
         </div>
         <?php
+        OneClick_Admin_UI::render('oneclick-ai-setup', ob_get_clean());
     }
 
     private function get_disclosure_metadata() {

@@ -123,6 +123,7 @@ class OneClick_Actions_Admin {
             return;
         }
 
+        ob_start();
         $view = sanitize_key($_GET['view'] ?? 'list');
         $action_id = absint($_GET['id'] ?? 0);
 
@@ -139,6 +140,7 @@ class OneClick_Actions_Admin {
         }
 
         echo '</div>';
+        OneClick_Admin_UI::render(self::MENU_SLUG, ob_get_clean());
     }
 
     /**

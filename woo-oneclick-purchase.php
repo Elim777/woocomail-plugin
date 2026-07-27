@@ -25,6 +25,12 @@ define('ONECLICK_VERSION', '1.1.0');
 define('ONECLICK_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('ONECLICK_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('ONECLICK_PLUGIN_FILE', __FILE__);
+if (!defined('ONECLICK_SESSION_THEME')) {
+    define('ONECLICK_SESSION_THEME', 'ocliby');
+}
+if (!defined('ONECLICK_PURCHASE_SESSION_VARIANT')) {
+    define('ONECLICK_PURCHASE_SESSION_VARIANT', 'dynamic');
+}
 
 /**
  * CRITICAL: HPOS (High-Performance Order Storage) Compatibility Declaration
@@ -207,6 +213,9 @@ function oneclick_load_classes() {
     // Logger must load early so all plugin components can write to WooCommerce logs.
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-logger.php';
 
+    // Presentation-only React shell for OneClick admin pages.
+    require_once ONECLICK_PLUGIN_DIR . 'includes/class-admin-ui.php';
+
     // API client (must be loaded before settings — settings uses it)
     require_once ONECLICK_PLUGIN_DIR . 'includes/class-api-client.php';
 
@@ -263,6 +272,7 @@ function oneclick_init() {
     oneclick_load_classes();
 
     // Initialize components
+    new OneClick_Admin_UI();
     new OneClick_Settings();
     new OneClick_JWT_Test();
     new OneClick_Actions_Admin();

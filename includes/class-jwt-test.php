@@ -33,6 +33,7 @@ class OneClick_JWT_Test {
             return;
         }
 
+        ob_start();
         $results = $this->run_tests();
         ?>
         <div class="wrap">
@@ -64,6 +65,7 @@ class OneClick_JWT_Test {
             </div>
         </div>
         <?php
+        OneClick_Admin_UI::render('oneclick-jwt-test', ob_get_clean());
     }
 
     private function run_tests() {

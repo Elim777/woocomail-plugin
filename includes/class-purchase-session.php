@@ -60,7 +60,7 @@ class OneClick_Purchase_Session {
             ],
         ]);
 
-        foreach (['status', 'add-item', 'update-quantity', 'remove-item', 'extend', 'cancel', 'checkout'] as $action) {
+        foreach (['status', 'add-item', 'update-quantity', 'remove-item', 'extend', 'cancel', 'checkout', 'confirm'] as $action) {
             register_rest_route('oneclick/v1', '/session/' . $action, [
                 'methods' => 'POST',
                 'callback' => [$this, 'handle_session_action'],
@@ -105,6 +105,10 @@ class OneClick_Purchase_Session {
         $branding = $this->get_session_branding();
         $brand_name = !empty($branding['company_name']) ? $branding['company_name'] : get_bloginfo('name');
         $logo_url = !empty($branding['logo_url']) ? esc_url($branding['logo_url']) : '';
+        $session_theme = $this->get_session_theme($session_id);
+        $theme_stylesheet = $this->get_session_theme_stylesheet($session_theme);
+        $session_variant = $this->normalize_session_variant($public_state['session_variant'] ?? 'standard');
+        $dynamic_stylesheet = $this->get_dynamic_session_stylesheet($session_variant);
 
         header('Content-Type: text/html; charset=utf-8');
         ?>
@@ -749,8 +753,14 @@ class OneClick_Purchase_Session {
             .oc-complete-price { grid-column: 2; }
         }
     </style>
+    <?php if ($theme_stylesheet): ?>
+        <link rel="stylesheet" href="<?php echo esc_url($theme_stylesheet); ?>">
+    <?php endif; ?>
+    <?php if ($dynamic_stylesheet): ?>
+        <link rel="stylesheet" href="<?php echo esc_url($dynamic_stylesheet); ?>">
+    <?php endif; ?>
 </head>
-<body>
+<body class="oc-session-page oc-theme-<?php echo esc_attr($session_theme); ?> oc-variant-<?php echo esc_attr($session_variant); ?>">
     <header class="oc-topbar">
         <div class="oc-shell oc-header">
             <div class="oc-brand">
@@ -765,8 +775,8 @@ class OneClick_Purchase_Session {
                     <?php endif; ?>
                 </div>
                 <div>
-                    <h1><?php echo esc_html__('Purchase Window', 'woo-oneclick'); ?></h1>
-                    <p><?php echo esc_html__('Add products, then continue to checkout.', 'woo-oneclick'); ?></p>
+                    <h1><?php echo esc_html($session_variant === 'dynamic' ? __('Flash Purchase', 'woo-oneclick') : __('Purchase Window', 'woo-oneclick')); ?></h1>
+                    <p><?php echo esc_html($session_variant === 'dynamic' ? __('Review your items and confirm before time runs out.', 'woo-oneclick') : __('Add products, then continue to checkout.', 'woo-oneclick')); ?></p>
                 </div>
             </div>
             <div class="oc-status-chip" aria-live="polite">
@@ -774,6 +784,19 @@ class OneClick_Purchase_Session {
                 <span id="oc-timer">--:--</span>
             </div>
         </div>
+        <?php if ($session_variant === 'dynamic'): ?>
+            <div class="oc-shell oc-dynamic-timer-panel" aria-label="<?php echo esc_attr__('Purchase window countdown', 'woo-oneclick'); ?>">
+                <div class="oc-dynamic-timer-meta">
+                    <span id="oc-urgency-label"><?php echo esc_html__('Ready to confirm', 'woo-oneclick'); ?></span>
+                    <button type="button" id="oc-sound-toggle" class="oc-sound-toggle" aria-pressed="false">
+                        <?php echo esc_html__('Sound off', 'woo-oneclick'); ?>
+                    </button>
+                </div>
+                <div class="oc-dynamic-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                    <span id="oc-dynamic-progress"></span>
+                </div>
+            </div>
+        <?php endif; ?>
     </header>
 
     <main class="oc-shell">
@@ -816,7 +839,7 @@ class OneClick_Purchase_Session {
                 <div class="oc-panel-head">
                     <div>
                         <h2><?php echo esc_html__('Products from your offer', 'woo-oneclick'); ?></h2>
-                        <p id="oc-status"></p>
+                        <p id="oc-status" role="status" aria-live="polite"></p>
                     </div>
                     <div class="oc-count-pill" id="oc-product-count">0</div>
                 </div>
@@ -846,12 +869,15 @@ class OneClick_Purchase_Session {
                     <div class="oc-actions">
                         <div class="oc-action-row">
                             <div>
-                                <span><?php echo esc_html__('Add 5 minutes', 'woo-oneclick'); ?></span>
+                                <span><?php echo esc_html($session_variant === 'dynamic' ? __('Add 15 seconds', 'woo-oneclick') : __('Add 5 minutes', 'woo-oneclick')); ?></span>
                                 <small><?php echo esc_html__('Extend this purchase window', 'woo-oneclick'); ?></small>
                             </div>
-                            <button type="button" class="oc-mini-button" id="oc-extend">+5</button>
+                            <button type="button" class="oc-mini-button" id="oc-extend"><?php echo esc_html($session_variant === 'dynamic' ? '+15s' : '+5'); ?></button>
                         </div>
-                        <button type="button" class="oc-primary" id="oc-checkout"><?php echo esc_html__('Continue to Checkout', 'woo-oneclick'); ?></button>
+                        <?php if ($session_variant === 'dynamic'): ?>
+                            <button type="button" class="oc-primary oc-confirm" id="oc-confirm"><?php echo esc_html__('Confirm Now', 'woo-oneclick'); ?></button>
+                        <?php endif; ?>
+                        <button type="button" class="oc-primary" id="oc-checkout"<?php echo $session_variant === 'dynamic' ? ' hidden' : ''; ?>><?php echo esc_html__('Continue to Checkout', 'woo-oneclick'); ?></button>
                         <button type="button" class="oc-secondary-danger" id="oc-cancel"><?php echo esc_html__('Cancel order', 'woo-oneclick'); ?></button>
                     </div>
                 </section>
@@ -873,6 +899,9 @@ class OneClick_Purchase_Session {
         var restBase = window.oneclickSession.restBase;
         var countdownSyncedAt = Date.now();
         var countdownBaseSeconds = Number(state.remaining_seconds || 0);
+        var countdownDeadlineMs = Date.now() + (countdownBaseSeconds * 1000);
+        var countdownWindowSeconds = Math.max(1, Number(state.session_duration_seconds || countdownBaseSeconds || 1));
+        var dynamicVariant = state.session_variant === "dynamic";
         var timer = document.getElementById("oc-timer");
         var status = document.getElementById("oc-status");
         var products = document.getElementById("oc-products");
@@ -883,7 +912,12 @@ class OneClick_Purchase_Session {
         var itemCount = document.getElementById("oc-item-count");
         var extend = document.getElementById("oc-extend");
         var checkout = document.getElementById("oc-checkout");
+        var confirmNow = document.getElementById("oc-confirm");
         var cancel = document.getElementById("oc-cancel");
+        var dynamicProgress = document.getElementById("oc-dynamic-progress");
+        var dynamicTrack = document.querySelector(".oc-dynamic-track");
+        var urgencyLabel = document.getElementById("oc-urgency-label");
+        var soundToggle = document.getElementById("oc-sound-toggle");
         var activeLayout = document.getElementById("oc-active-layout");
         var completeView = document.getElementById("oc-complete");
         var completeCopy = document.getElementById("oc-complete-copy");
@@ -894,18 +928,39 @@ class OneClick_Purchase_Session {
         var checkoutRedirectStarted = false;
         var checkoutAutoAttempted = false;
         var checkoutRedirectFailed = false;
+        var confirmationStarted = false;
+        var soundEnabled = false;
+        var lastSoundSecond = null;
+        var audioContext = null;
+        var page = document.body;
 
         function money(value, currency) {
             return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "EUR" }).format(Number(value || 0));
         }
         function currentRemaining() {
+            if (dynamicVariant) {
+                return Math.max(0, (countdownDeadlineMs - Date.now()) / 1000);
+            }
             var elapsed = Math.floor((Date.now() - countdownSyncedAt) / 1000);
             return Math.max(0, countdownBaseSeconds - elapsed);
         }
         function syncCountdown(nextState) {
             state = nextState;
+            dynamicVariant = state.session_variant === "dynamic";
             countdownSyncedAt = Date.now();
             countdownBaseSeconds = Math.max(0, Number(state.remaining_seconds || 0));
+            var serverTime = Date.parse(state.server_time || "");
+            var finalizeAfter = Date.parse(state.finalize_after || "");
+            var preciseRemainingMs = isFinite(serverTime) && isFinite(finalizeAfter)
+                ? Math.max(0, finalizeAfter - serverTime)
+                : countdownBaseSeconds * 1000;
+            countdownDeadlineMs = Date.now() + preciseRemainingMs;
+            countdownWindowSeconds = Math.max(
+                countdownWindowSeconds,
+                1,
+                Number(state.session_duration_seconds || 0),
+                preciseRemainingMs / 1000
+            );
         }
         function post(action, body) {
             body = body || {};
@@ -1027,12 +1082,106 @@ class OneClick_Purchase_Session {
                 status.textContent = "Could not redirect automatically. Please click Continue to Checkout.";
             });
         }
+        function playTick(remaining) {
+            if (!soundEnabled || remaining > Number(state.danger_threshold_seconds || 5)) {
+                return;
+            }
+            var soundSecond = Math.ceil(remaining);
+            if (soundSecond === lastSoundSecond || soundSecond <= 0) {
+                return;
+            }
+            lastSoundSecond = soundSecond;
+            try {
+                audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+                var oscillator = audioContext.createOscillator();
+                var gain = audioContext.createGain();
+                oscillator.frequency.value = soundSecond <= 2 ? 720 : 560;
+                gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.08);
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.09);
+            } catch (error) {
+                soundEnabled = false;
+                if (soundToggle) {
+                    soundToggle.setAttribute("aria-pressed", "false");
+                    soundToggle.textContent = "Sound off";
+                }
+            }
+        }
+        function confirmSession(isAuto) {
+            if (confirmationStarted || state.status !== "active" || !(state.items || []).length) {
+                return;
+            }
+            confirmationStarted = true;
+            page.classList.add("is-confirming");
+            status.textContent = state.finalization_mode === "checkout"
+                ? "Preparing checkout..."
+                : "Finalizing your order...";
+            if (confirmNow) {
+                confirmNow.disabled = true;
+                confirmNow.textContent = state.finalization_mode === "checkout" ? "Preparing Checkout..." : "Confirming...";
+            }
+            post("confirm").then(function(data) {
+                if (data && data.checkout_url) {
+                    window.location.href = data.checkout_url;
+                    return;
+                }
+                if (!data || !data.session || data.session.status === "active") {
+                    confirmationStarted = false;
+                    page.classList.remove("is-confirming");
+                    if (confirmNow) {
+                        confirmNow.textContent = "Confirm Now";
+                    }
+                    status.textContent = isAuto
+                        ? "Automatic confirmation could not start. Please confirm now."
+                        : "Confirmation could not start. Please try again.";
+                    render();
+                }
+            }).catch(function() {
+                confirmationStarted = false;
+                page.classList.remove("is-confirming");
+                if (confirmNow) {
+                    confirmNow.textContent = "Confirm Now";
+                }
+                status.textContent = "Confirmation could not start. Please try again.";
+                render();
+            });
+        }
         function tick() {
             if (state.status !== "active") {
+                page.classList.remove("is-warning", "is-danger");
                 timer.textContent = state.status === "finalized" ? "Complete" : state.status.toUpperCase();
                 return;
             }
             var remaining = currentRemaining();
+            if (dynamicVariant) {
+                var danger = Math.max(1, Number(state.danger_threshold_seconds || 5));
+                var warning = danger * 2;
+                var progress = Math.max(0, Math.min(100, (remaining / countdownWindowSeconds) * 100));
+                timer.textContent = remaining.toFixed(1) + "s";
+                page.classList.toggle("is-warning", remaining > danger && remaining <= warning);
+                page.classList.toggle("is-danger", remaining > 0 && remaining <= danger);
+                if (urgencyLabel) {
+                    urgencyLabel.textContent = remaining <= danger
+                        ? "Confirm now"
+                        : (remaining <= warning ? "Time is running low" : "Ready to confirm");
+                }
+                if (dynamicProgress) {
+                    dynamicProgress.style.width = progress + "%";
+                }
+                if (dynamicTrack) {
+                    dynamicTrack.setAttribute("aria-valuenow", String(Math.round(progress)));
+                }
+                playTick(remaining);
+                if (remaining <= 0) {
+                    timer.textContent = "0.0s";
+                    confirmSession(true);
+                }
+                return;
+            }
             if (remaining === 0) {
                 if (state.finalization_mode === "checkout") {
                     timer.textContent = "Checkout";
@@ -1050,6 +1199,9 @@ class OneClick_Purchase_Session {
             timer.textContent = m + ":" + s;
         }
         function render() {
+            page.setAttribute("data-session-status", state.status || "unknown");
+            page.setAttribute("data-finalization-mode", state.finalization_mode || "unknown");
+            page.setAttribute("data-session-variant", state.session_variant || "standard");
             if (state.status === "finalized") {
                 renderCompleteView();
                 return;
@@ -1110,7 +1262,7 @@ class OneClick_Purchase_Session {
                 button.type = "button";
                 button.className = "oc-add";
                 button.textContent = selectedItem ? "Added" : "Add";
-                button.disabled = !!selectedItem || product.selected || state.status !== "active";
+                button.disabled = !!selectedItem || product.selected || state.status !== "active" || (dynamicVariant && currentRemaining() <= 0);
                 button.addEventListener("click", function() { post("add-item", { offer_item_id: product.offer_item_id }); });
                 foot.appendChild(button);
 
@@ -1143,9 +1295,9 @@ class OneClick_Purchase_Session {
 
                 var controlsWrap = document.createElement("div");
                 controlsWrap.className = "oc-line-controls";
-                var controls = "<span class=\"oc-qty\"><button type=\"button\" data-dec>-</button><strong>" + item.quantity + "</strong><button type=\"button\" data-inc>+</button></span>";
+                var controls = "<span class=\"oc-qty\"><button type=\"button\" aria-label=\"Decrease quantity\" data-dec>-</button><strong>" + item.quantity + "</strong><button type=\"button\" aria-label=\"Increase quantity\" data-inc>+</button></span>";
                 if (item.can_remove) {
-                    controls += " <button type=\"button\" class=\"oc-remove\" title=\"Remove\" data-remove>&times;</button>";
+                    controls += " <button type=\"button\" class=\"oc-remove\" aria-label=\"Remove product\" title=\"Remove\" data-remove>&times;</button>";
                 }
                 controlsWrap.innerHTML = controls;
                 detail.appendChild(controlsWrap);
@@ -1153,13 +1305,13 @@ class OneClick_Purchase_Session {
 
                 var dec = line.querySelector("[data-dec]");
                 var inc = line.querySelector("[data-inc]");
-                dec.disabled = item.quantity <= 1 || state.status !== "active";
-                inc.disabled = state.status !== "active";
+                dec.disabled = item.quantity <= 1 || state.status !== "active" || (dynamicVariant && currentRemaining() <= 0);
+                inc.disabled = state.status !== "active" || (dynamicVariant && currentRemaining() <= 0);
                 dec.addEventListener("click", function() { post("update-quantity", { product_id: item.product_id, quantity: item.quantity - 1 }); });
                 inc.addEventListener("click", function() { post("update-quantity", { product_id: item.product_id, quantity: item.quantity + 1 }); });
                 var remove = line.querySelector("[data-remove]");
                 if (remove) {
-                    remove.disabled = state.status !== "active";
+                    remove.disabled = state.status !== "active" || (dynamicVariant && currentRemaining() <= 0);
                     remove.addEventListener("click", function() { post("remove-item", { product_id: item.product_id }); });
                 }
                 items.appendChild(line);
@@ -1167,16 +1319,46 @@ class OneClick_Purchase_Session {
 
             total.textContent = money(state.total, state.currency);
             itemCount.textContent = String((state.items || []).length);
-            extend.disabled = state.status !== "active";
-            cancel.disabled = state.status !== "active";
-            checkout.style.display = state.finalization_mode === "checkout" && state.status === "active" ? "" : "none";
+            var mutationsAllowed = state.status === "active" && (!dynamicVariant || currentRemaining() > 0);
+            extend.disabled = !mutationsAllowed || (dynamicVariant && Number(state.extensions_remaining || 0) <= 0);
+            extend.textContent = dynamicVariant
+                ? (Number(state.extensions_remaining || 0) > 0 ? "+15s" : "Max")
+                : "+5";
+            cancel.disabled = !mutationsAllowed;
+            checkout.style.display = !dynamicVariant && state.finalization_mode === "checkout" && state.status === "active" ? "" : "none";
             checkout.disabled = checkoutRedirectStarted || state.status !== "active" || !(state.items || []).length;
+            if (confirmNow) {
+                confirmNow.style.display = dynamicVariant && state.status === "active" ? "" : "none";
+                confirmNow.disabled = confirmationStarted || state.status !== "active" || !(state.items || []).length;
+                if (!confirmationStarted) {
+                    confirmNow.textContent = state.finalization_mode === "checkout" ? "Continue to Checkout" : "Confirm Now";
+                }
+            }
         }
         extend.addEventListener("click", function() { post("extend"); });
         checkout.addEventListener("click", function() { redirectToCheckout(false); });
+        if (confirmNow) {
+            confirmNow.addEventListener("click", function() { confirmSession(false); });
+        }
+        if (soundToggle) {
+            soundToggle.addEventListener("click", function() {
+                soundEnabled = !soundEnabled;
+                soundToggle.setAttribute("aria-pressed", soundEnabled ? "true" : "false");
+                soundToggle.textContent = soundEnabled ? "Sound on" : "Sound off";
+                if (soundEnabled && window.AudioContext) {
+                    audioContext = audioContext || new window.AudioContext();
+                    audioContext.resume();
+                }
+            });
+        }
         cancel.addEventListener("click", function() { if (confirm("Cancel this purchase window?")) { post("cancel"); } });
-        setInterval(tick, 1000);
-        setInterval(function() { post("status"); }, 5000);
+        syncCountdown(state);
+        setInterval(tick, dynamicVariant ? 100 : 1000);
+        setInterval(function() {
+            if (!dynamicVariant || state.status === "active" || state.status === "finalizing") {
+                post("status");
+            }
+        }, dynamicVariant ? 1000 : 5000);
         render();
     })();
     </script>
@@ -1200,6 +1382,9 @@ class OneClick_Purchase_Session {
             'session_id' => $session_id,
             'access_token' => $access_token,
         ];
+        if ($action === 'confirm') {
+            return $this->handle_dynamic_confirm($body);
+        }
         if ($action === 'checkout') {
             return $this->handle_checkout_redirect($body);
         }
@@ -1230,6 +1415,58 @@ class OneClick_Purchase_Session {
             $result['session'] = $this->public_session_state($result['session']);
         }
         return rest_ensure_response($result);
+    }
+
+    private function handle_dynamic_confirm($body) {
+        $status_result = $this->backend_session_post('/api/purchase-sessions/status', $body);
+        if (is_wp_error($status_result)) {
+            return $status_result;
+        }
+
+        $session = $status_result['session'] ?? [];
+        if (($session['session_variant'] ?? 'standard') !== 'dynamic') {
+            return new WP_Error(
+                'oneclick_session_not_dynamic',
+                'Early confirmation is available only for dynamic purchase sessions',
+                ['status' => 400]
+            );
+        }
+
+        if (($session['status'] ?? '') !== 'active') {
+            return rest_ensure_response([
+                'success' => true,
+                'claimed' => false,
+                'session' => $this->public_session_state($session),
+            ]);
+        }
+
+        if (($session['finalization_mode'] ?? '') === 'checkout') {
+            return $this->handle_checkout_redirect($body);
+        }
+
+        $claim = $this->backend_session_post(
+            '/api/purchase-sessions/claim-for-finalization',
+            $body,
+            ['timeout' => 60]
+        );
+        if (is_wp_error($claim)) {
+            return $claim;
+        }
+
+        if (!empty($claim['claimed']) && !empty($claim['session'])) {
+            $this->finalize_session($claim['session']);
+        }
+
+        $latest = $this->backend_session_post('/api/purchase-sessions/status', $body);
+        if (is_wp_error($latest)) {
+            return $latest;
+        }
+
+        return rest_ensure_response([
+            'success' => true,
+            'claimed' => !empty($claim['claimed']),
+            'session' => $this->public_session_state($latest['session'] ?? ($claim['session'] ?? [])),
+        ]);
     }
 
     public function process_due_sessions() {
@@ -1486,6 +1723,58 @@ class OneClick_Purchase_Session {
         return 'cod';
     }
 
+    private function get_session_theme($session_id = '') {
+        $configured = defined('ONECLICK_SESSION_THEME') ? ONECLICK_SESSION_THEME : 'ocliby';
+        $theme = sanitize_key((string) apply_filters(
+            'oneclick_session_theme',
+            $configured,
+            sanitize_text_field((string) $session_id)
+        ));
+
+        return in_array($theme, ['ocliby', 'merchant'], true) ? $theme : 'ocliby';
+    }
+
+    private function get_session_theme_stylesheet($theme) {
+        if ($theme !== 'ocliby') {
+            return '';
+        }
+
+        $relative_path = 'assets/css/purchase-session-ocliby.css';
+        $file_path = ONECLICK_PLUGIN_DIR . $relative_path;
+        if (!is_readable($file_path)) {
+            return '';
+        }
+
+        return add_query_arg(
+            'ver',
+            (string) filemtime($file_path),
+            ONECLICK_PLUGIN_URL . $relative_path
+        );
+    }
+
+    private function normalize_session_variant($variant) {
+        $variant = sanitize_key((string) $variant);
+        return in_array($variant, ['standard', 'dynamic'], true) ? $variant : 'standard';
+    }
+
+    private function get_dynamic_session_stylesheet($variant) {
+        if ($this->normalize_session_variant($variant) !== 'dynamic') {
+            return '';
+        }
+
+        $relative_path = 'assets/css/purchase-session-dynamic.css';
+        $file_path = ONECLICK_PLUGIN_DIR . $relative_path;
+        if (!is_readable($file_path)) {
+            return '';
+        }
+
+        return add_query_arg(
+            'ver',
+            (string) filemtime($file_path),
+            ONECLICK_PLUGIN_URL . $relative_path
+        );
+    }
+
     private function get_session_branding($load_remote = true) {
         $defaults = [
             'logo_url'             => '',
@@ -1613,6 +1902,10 @@ class OneClick_Purchase_Session {
             'source_ref_id',
             'finalization_mode',
             'status',
+            'session_variant',
+            'session_duration_seconds',
+            'danger_threshold_seconds',
+            'extensions_remaining',
             'server_time',
             'finalize_after',
             'remaining_seconds',
@@ -1638,8 +1931,38 @@ class OneClick_Purchase_Session {
 
     private function render_error_page($title, $message) {
         $branding = $this->get_session_branding(false);
+        $session_theme = $this->get_session_theme();
+        $theme_stylesheet = $this->get_session_theme_stylesheet($session_theme);
+        $theme_link = $theme_stylesheet
+            ? '<link rel="stylesheet" href="' . esc_url($theme_stylesheet) . '">'
+            : '';
+        $brand_intro = '';
+        if ($session_theme === 'ocliby') {
+            $brand_intro = '<div class="oc-error-mark" aria-hidden="true">'
+                . '<svg width="24" height="24" viewBox="0 0 24 24" fill="none">'
+                . '<rect x="4" y="4" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.8"/>'
+                . '<rect x="14" y="4" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.8"/>'
+                . '<rect x="4" y="14" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.8"/>'
+                . '<rect x="14" y="14" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.8"/>'
+                . '</svg></div>'
+                . '<p class="oc-error-eyebrow">' . esc_html(get_bloginfo('name')) . '</p>';
+        }
         header('Content-Type: text/html; charset=utf-8');
-        echo '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>' . esc_html($title) . '</title><style>:root{' . $this->build_session_brand_css($branding) . '}*{box-sizing:border-box}body{font-family:var(--oc-font);background:var(--oc-bg);color:var(--oc-text);margin:0;padding:40px 18px}main{max-width:560px;margin:0 auto;background:var(--oc-surface);border:1px solid var(--oc-outline-soft);border-radius:24px;padding:30px;box-shadow:var(--oc-shadow)}h1{margin:0 0 12px;color:var(--oc-heading);font-size:24px;line-height:1.25}p{margin:0;color:var(--oc-muted);font-size:15px;line-height:1.55}</style></head><body><main><h1>' . esc_html($title) . '</h1><p>' . esc_html($message) . '</p></main></body></html>';
+        echo '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>'
+            . esc_html($title)
+            . '</title><style>:root{'
+            . $this->build_session_brand_css($branding)
+            . '}*{box-sizing:border-box}body{font-family:var(--oc-font);background:var(--oc-bg);color:var(--oc-text);margin:0;padding:40px 18px}main{max-width:560px;margin:0 auto;background:var(--oc-surface);border:1px solid var(--oc-outline-soft);border-radius:24px;padding:30px;box-shadow:var(--oc-shadow)}h1{margin:0 0 12px;color:var(--oc-heading);font-size:24px;line-height:1.25}p{margin:0;color:var(--oc-muted);font-size:15px;line-height:1.55}</style>'
+            . $theme_link
+            . '</head><body class="oc-session-page oc-session-error oc-theme-'
+            . esc_attr($session_theme)
+            . '"><main>'
+            . $brand_intro
+            . '<h1>'
+            . esc_html($title)
+            . '</h1><p>'
+            . esc_html($message)
+            . '</p></main></body></html>';
         exit;
     }
 }

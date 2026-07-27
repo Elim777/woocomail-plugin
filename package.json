@@ -1,0 +1,7 @@
+{
+  "name": "woo-oneclick-admin-ui",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build-admin-ui.mjs"
+  }
+}

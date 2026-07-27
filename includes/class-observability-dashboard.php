@@ -36,6 +36,7 @@ class OneClick_Observability_Dashboard {
             wp_die(__('You do not have permission to access this page.', 'woo-oneclick'));
         }
 
+        ob_start();
         $hours = isset($_GET['hours']) ? absint($_GET['hours']) : 24;
         if (!in_array($hours, [24, 168, 720], true)) {
             $hours = 24;
@@ -54,6 +55,7 @@ class OneClick_Observability_Dashboard {
         if (is_wp_error($overview)) {
             echo '<div class="notice notice-error"><p>' . esc_html($overview->get_error_message()) . '</p></div>';
             echo '</div>';
+            OneClick_Admin_UI::render(self::MENU_SLUG, ob_get_clean());
             return;
         }
         if (is_wp_error($sessions)) {
@@ -70,6 +72,7 @@ class OneClick_Observability_Dashboard {
         $this->render_technical_health($overview);
 
         echo '</div>';
+        OneClick_Admin_UI::render(self::MENU_SLUG, ob_get_clean());
     }
 
     private function render_window_tabs($hours) {

@@ -544,15 +544,29 @@ class OneClick_Public_Links {
             'discount_percent' => $discount_percent > 0 ? $discount_percent : null,
             'discount_type' => $discount_percent > 0 ? $discount_type : null,
             'anonymous_destination' => $anonymous_destination,
+            'session_variant' => $this->get_public_session_variant(),
             'status' => sanitize_text_field($_POST['link_status'] ?? 'active'),
             'expires_at' => null,
         ];
+    }
+
+    private function get_public_session_variant() {
+        $variant = sanitize_key((string) apply_filters(
+            'oneclick_purchase_session_variant',
+            'standard',
+            'public_link',
+            0,
+            []
+        ));
+
+        return in_array($variant, ['standard', 'dynamic'], true) ? $variant : 'standard';
     }
 
     public function render_page() {
         if (!current_user_can('manage_woocommerce')) {
             return;
         }
+        ob_start();
         $view = sanitize_key($_GET['view'] ?? 'list');
         $id = absint($_GET['id'] ?? 0);
         echo '<div class="wrap">';
@@ -564,6 +578,7 @@ class OneClick_Public_Links {
             $this->render_list();
         }
         echo '</div>';
+        OneClick_Admin_UI::render(self::MENU_SLUG, ob_get_clean());
     }
 
     private function render_list() {

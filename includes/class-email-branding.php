@@ -53,7 +53,7 @@ class OneClick_Email_Branding {
         wp_enqueue_script(
             'oneclick-branding',
             ONECLICK_PLUGIN_URL . 'assets/js/branding.js',
-            ['jquery', 'wp-color-picker'],
+            ['jquery', 'wp-color-picker', 'oneclick-admin-ui'],
             ONECLICK_VERSION,
             true
         );
@@ -61,7 +61,7 @@ class OneClick_Email_Branding {
         wp_enqueue_script(
             'oneclick-domain-setup',
             ONECLICK_PLUGIN_URL . 'assets/js/domain-setup.js',
-            ['jquery'],
+            ['jquery', 'oneclick-admin-ui'],
             ONECLICK_VERSION,
             true
         );
@@ -202,6 +202,7 @@ class OneClick_Email_Branding {
             return;
         }
 
+        ob_start();
         // Fetch current branding from backend
         $api = OneClick_API_Client::instance();
         $branding = $api->get('/api/branding', ['site_url' => site_url()]);
@@ -267,7 +268,7 @@ class OneClick_Email_Branding {
         ?>
         <div class="wrap">
             <h1><?php _e('Email & Purchase Branding', 'woo-oneclick'); ?></h1>
-            <p class="description"><?php _e('These settings style customer emails and the timed purchase window. Email copy fields still apply to email content only.', 'woo-oneclick'); ?></p>
+            <p class="description"><?php _e('These settings style customer emails and the merchant-themed purchase window. The Ocliby session theme keeps its system colors and typography while using the merchant logo and company name. Email copy fields apply to email content only.', 'woo-oneclick'); ?></p>
 
             <!-- ============================================================ -->
             <!-- DOMAIN SETUP SECTION                                         -->
@@ -489,7 +490,7 @@ class OneClick_Email_Branding {
                 <!-- Preview Panel -->
                 <div class="oneclick-branding-preview">
                     <h2><?php _e('Customer Email Preview', 'woo-oneclick'); ?></h2>
-                    <p class="description"><?php _e('Save branding first, then refresh preview. The purchase window uses the same visual colors, logo, font, and button styling.', 'woo-oneclick'); ?></p>
+                    <p class="description"><?php _e('Save branding first, then refresh preview. This preview represents the customer email. The merchant session theme also uses these colors and typography; the Ocliby session theme uses the saved logo and company name.', 'woo-oneclick'); ?></p>
                     <button type="button" class="button oneclick-refresh-preview"><?php _e('Refresh Preview', 'woo-oneclick'); ?></button>
                     <div style="margin-top:10px;">
                         <iframe id="oneclick-preview-frame" src="<?php echo esc_url($preview_url); ?>" style="width:100%; height:600px; border:1px solid #ccd0d4; border-radius:4px;"></iframe>
@@ -498,6 +499,7 @@ class OneClick_Email_Branding {
             </div>
         </div>
         <?php
+        OneClick_Admin_UI::render(self::MENU_SLUG, ob_get_clean());
     }
 
     // ========================================================================

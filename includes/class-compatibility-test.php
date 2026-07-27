@@ -33,6 +33,7 @@ class OneClick_Compatibility_Test {
     }
 
     public function render_page() {
+        ob_start();
         $nonce = wp_create_nonce('oneclick_compat_nonce');
         ?>
         <div class="wrap">
@@ -79,74 +80,8 @@ class OneClick_Compatibility_Test {
             </div>
         </div>
 
-        <script>
-        jQuery(function($) {
-            $('#oneclick-run-checks').on('click', function() {
-                var $btn = $(this);
-                $btn.prop('disabled', true).text('<?php echo esc_js(__('Running...', 'woo-oneclick')); ?>');
-
-                $.post(ajaxurl, {
-                    action: 'oneclick_compat_check',
-                    nonce: $btn.data('nonce')
-                }).done(function(response) {
-                    if (response.success) {
-                        renderChecks(response.data.checks || []);
-                    } else {
-                        renderError(response.data && response.data.message ? response.data.message : '<?php echo esc_js(__('Checks failed.', 'woo-oneclick')); ?>');
-                    }
-                }).fail(function(xhr) {
-                    renderError(xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ? xhr.responseJSON.data.message : '<?php echo esc_js(__('Request failed. Check WooCommerce logs source oneclick-core.', 'woo-oneclick')); ?>');
-                }).always(function() {
-                    $btn.prop('disabled', false).text('<?php echo esc_js(__('Run Checks', 'woo-oneclick')); ?>');
-                });
-            });
-
-            $('#oneclick-test-email-btn').on('click', function() {
-                var $btn = $(this);
-                var email = $('#oneclick-test-email-input').val();
-                $btn.prop('disabled', true);
-                $('#oneclick-test-email-status').text('<?php echo esc_js(__('Sending...', 'woo-oneclick')); ?>');
-
-                $.post(ajaxurl, {
-                    action: 'oneclick_test_email',
-                    nonce: $btn.data('nonce'),
-                    email: email
-                }).done(function(response) {
-                    var status = response.success ? (response.data.message || '<?php echo esc_js(__('Sent!', 'woo-oneclick')); ?>') : (response.data && response.data.message ? response.data.message : '<?php echo esc_js(__('Failed', 'woo-oneclick')); ?>');
-                    var color = response.success ? '#00a32a' : '#d63638';
-                    $('#oneclick-test-email-status').html('<span style="color:' + color + ';">' + escapeHtml(status) + '</span>');
-                }).fail(function(xhr) {
-                    var message = xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ? xhr.responseJSON.data.message : '<?php echo esc_js(__('Request failed. Check WooCommerce logs source oneclick-core.', 'woo-oneclick')); ?>';
-                    $('#oneclick-test-email-status').html('<span style="color:#d63638;">' + escapeHtml(message) + '</span>');
-                }).always(function() {
-                    $btn.prop('disabled', false);
-                });
-            });
-
-            function renderChecks(checks) {
-                var $tbody = $('#oneclick-compat-table tbody').empty();
-                checks.forEach(function(check) {
-                    var icon = check.pass ? '<span style="color:#00a32a; font-size:18px;">&#10003;</span>' : '<span style="color:#d63638; font-size:18px;">&#10007;</span>';
-                    $tbody.append(
-                        '<tr>' +
-                        '<td style="text-align:center;">' + icon + '</td>' +
-                        '<td><strong>' + escapeHtml(check.name) + '</strong></td>' +
-                        '<td>' + escapeHtml(check.detail) + '</td>' +
-                        '</tr>'
-                    );
-                });
-            }
-
-            function renderError(message) {
-                $('#oneclick-compat-table tbody').html('<tr><td colspan="3"><span style="color:#d63638;">' + escapeHtml(message) + '</span></td></tr>');
-            }
-
-            function escapeHtml(value) {
-                return $('<div>').text(value || '').html();
-            }
-        });
-        </script>
         <?php
+        OneClick_Admin_UI::render('oneclick-compat-test', ob_get_clean());
     }
 
     public function ajax_run_checks() {
